@@ -357,6 +357,16 @@ export default function InventoryControlApp() {
   }
 
   async function startCamera() {
+    // iPhone / Safari fix: ensure video plays inline
+    try {
+      if (videoRef.current) {
+        videoRef.current.setAttribute("playsinline", true);
+        videoRef.current.setAttribute("autoplay", true);
+        videoRef.current.setAttribute("muted", true);
+      }
+    } catch {}
+
+
     try {
       setShowScannerModal(true);
       setScanResult("");
@@ -686,7 +696,7 @@ export default function InventoryControlApp() {
 
         <Modal open={showScannerModal} onClose={stopCamera} title="Scan QR">
           <div style={{ display: "grid", gap: 14 }}>
-            <video ref={videoRef} style={{ width: "100%", borderRadius: 18, background: "black" }} playsInline muted />
+            <video ref={videoRef} style={{ width: "100%", borderRadius: 18, background: "black" }} autoPlay playsInline muted />
             <input style={styles.input} value={scanResult} readOnly placeholder="Scan result will appear here" />
           </div>
         </Modal>
@@ -694,4 +704,3 @@ export default function InventoryControlApp() {
     </div>
   );
 }
-
