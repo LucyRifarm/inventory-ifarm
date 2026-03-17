@@ -298,6 +298,7 @@ export default function InventoryControlApp() {
   const [scanResult, setScanResult] = useState("");
   const [activeTab, setActiveTab] = useState("cards");
   const [bulkType, setBulkType] = useState("All");
+  const [selectedItemId, setSelectedItemId] = useState(null);
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -338,6 +339,11 @@ export default function InventoryControlApp() {
         .some((value) => String(value).toLowerCase().includes(q))
     );
   }, [items, search]);
+
+  const selectedItem = useMemo(
+    () => items.find((item) => item.id === selectedItemId) || null,
+    [items, selectedItemId]
+  );
 
   const stats = useMemo(
     () => ({
@@ -380,6 +386,15 @@ export default function InventoryControlApp() {
 
   function deleteItem(id) {
     setItems((prev) => prev.filter((item) => item.id !== id));
+    if (selectedItemId === id) setSelectedItemId(null);
+  }
+
+  function openItemEditor(id) {
+    setSelectedItemId(id);
+  }
+
+  function closeItemEditor() {
+    setSelectedItemId(null);
   }
 
   async function startCamera() {
@@ -473,6 +488,10 @@ export default function InventoryControlApp() {
     const value = String(rawValue).trim();
     setScanResult(value);
     setSearch(value);
+    const matchedItem = items.find((item) => String(item.id).toLowerCase() === value.toLowerCase());
+    if (matchedItem) {
+      setSelectedItemId(matchedItem.id);
+    }
     stopCamera();
   }
 
@@ -827,6 +846,9 @@ export default function InventoryControlApp() {
 
                   <div style={styles.qrBox}>
                     <QRCodeSVG id={`qr-${item.id}`} value={item.id} size={92} />
+                    <button style={styles.button} onClick={() => openItemEditor(item.id)}>
+                      Edit
+                    </button>
                     <button style={styles.button} onClick={() => printLabel(item)}>
                       <Printer size={16} />
                       Label
@@ -1017,6 +1039,80 @@ export default function InventoryControlApp() {
               Save Item
             </button>
           </div>
+        </Modal>
+
+        <Modal open={selectedItem !== null} onClose={closeItemEditor} title={selectedItem ? `Update ${selectedItem.id}` : "Update Item"}>
+          {selectedItem && (
+            <div style={styles.formGrid}>
+              <LabeledInput label="Item ID">
+                <input style={styles.input} value={selectedItem.id} readOnly />
+              </LabeledInput>
+
+              <LabeledInput label="Type">
+                <input style={styles.input} value={selectedItem.type} readOnly />
+              </LabeledInput>
+
+              <LabeledInput label="Status">
+                <select
+                  style={styles.select}
+                  value={selectedItem.status || "Available"}
+                  onChange={(e) => updateItemField(selectedItem.id, "status", e.target.value)}
+                >
+                  {STATUSES.map((status) => (
+                    <option key={status} value={status}>
+                      {status}
+                    </option>
+                  ))}
+                </select>
+              </LabeledInput>
+
+              <LabeledInput label="Location">
+                <select
+                  style={styles.select}
+                  value={selectedItem.location || "Warehouse"}
+                  onChange={(e) => updateItemField(selectedItem.id, "location", e.target.value)}
+                >
+                  {LOCATIONS.map((location) => (
+                    <option key={location} value={location}>
+                      {location}
+                    </option>
+                  ))}
+                </select>
+              </LabeledInput>
+
+              <LabeledInput label="Assigned To">
+                <input
+                  style={styles.input}
+                  value={selectedItem.assignedTo || ""}
+                  onChange={(e) => updateItemField(selectedItem.id, "assignedTo", e.target.value)}
+                />
+              </LabeledInput>
+
+              <LabeledInput label="Bluetooth Name">
+                <input
+                  style={styles.input}
+                  value={selectedItem.bluetoothName || ""}
+                  onChange={(e) => updateItemField(selectedItem.id, "bluetoothName", e.target.value)}
+                />
+              </LabeledInput>
+
+              <LabeledInput label="Model">
+                <input
+                  style={styles.input}
+                  value={selectedItem.model || ""}
+                  onChange={(e) => updateItemField(selectedItem.id, "model", e.target.value)}
+                />
+              </LabeledInput>
+
+              <LabeledInput label="Manufacturer SN">
+                <input
+                  style={styles.input}
+                  value={selectedItem.manufacturerSN || ""}
+                  onChange={(e) => updateItemField(selectedItem.id, "manufacturerSN", e.target.value)}
+                />
+              </LabeledInput>
+            </div>
+          )}
         </Modal>
 
         <Modal open={showScannerModal} onClose={stopCamera} title="Scan QR">
