@@ -302,8 +302,7 @@ function LabeledInput({ label, children }) {
       {children}
     </label>
   );
-}>{label}{children}</label>;
-}
+
 
 function normalizeUppercaseFields(field, value) {
   return ["manufacturerSN", "model", "bluetoothName"].includes(field)
