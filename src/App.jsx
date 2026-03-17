@@ -1,5 +1,4 @@
 // FORCE NEW BUILD - VERSION 2
-
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import jsQR from "jsqr";
@@ -20,10 +19,28 @@ const LOCATIONS = ["Warehouse", "Office", "Transit", "Customer Site"];
 const STATUSES = ["Available", "Reserved", "In Transit", "In Use", "In Repair", "Missing"];
 const STORAGE_KEY = "inventory-control-items-v6";
 const COMPANY_NAME = "i-Farm Inc";
+const LOGO_URL = "/ifarm-logo.png";
+const LABEL_PRESET = {
+  widthIn: 4,
+  heightIn: 2,
+  paddingIn: 0.12,
+};
 const TYPE_COLORS = {
   Scale: "#3b82f6",
   Printer: "#6b7280",
   Phone: "#8b5cf6",
+};
+const AVERY_18160 = {
+  pageWidthIn: 8.5,
+  pageHeightIn: 11,
+  labelWidthIn: 4,
+  labelHeightIn: 2,
+  columns: 2,
+  rows: 5,
+  marginLeftIn: 0.25,
+  marginTopIn: 0.5,
+  gapXIn: 0,
+  gapYIn: 0,
 };
 
 const EMPTY_FORM = {
@@ -31,6 +48,7 @@ const EMPTY_FORM = {
   id: "",
   manufacturerSN: "",
   model: "",
+  bluetoothName: "",
   location: "Warehouse",
   status: "Available",
   assignedTo: "",
@@ -203,7 +221,7 @@ const styles = {
   },
   table: {
     width: "100%",
-    minWidth: 980,
+    minWidth: 1080,
     borderCollapse: "collapse",
     fontSize: 14,
   },
@@ -278,6 +296,7 @@ export default function InventoryControlApp() {
   const [search, setSearch] = useState("");
   const [scanResult, setScanResult] = useState("");
   const [activeTab, setActiveTab] = useState("cards");
+  const [bulkType, setBulkType] = useState("All");
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -286,12 +305,11 @@ export default function InventoryControlApp() {
 
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      try {
-        setItems(JSON.parse(saved));
-      } catch {
-        setItems([]);
-      }
+    if (!saved) return;
+    try {
+      setItems(JSON.parse(saved));
+    } catch {
+      setItems([]);
     }
   }, []);
 
@@ -299,9 +317,7 @@ export default function InventoryControlApp() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
   }, [items]);
 
-  useEffect(() => {
-    return () => stopCamera();
-  }, []);
+  useEffect(() => () => stopCamera(), []);
 
   const filteredItems = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -315,18 +331,22 @@ export default function InventoryControlApp() {
         item.location,
         item.status,
         item.assignedTo,
+        item.bluetoothName,
       ]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(q))
     );
   }, [items, search]);
 
-  const stats = useMemo(() => ({
-    total: items.length,
-    scales: items.filter((i) => i.type === "Scale").length,
-    printers: items.filter((i) => i.type === "Printer").length,
-    phones: items.filter((i) => i.type === "Phone").length,
-  }), [items]);
+  const stats = useMemo(
+    () => ({
+      total: items.length,
+      scales: items.filter((i) => i.type === "Scale").length,
+      printers: items.filter((i) => i.type === "Printer").length,
+      phones: items.filter((i) => i.type === "Phone").length,
+    }),
+    [items]
+  );
 
   function generateNextId(type) {
     const prefix = TYPE_PREFIX[type];
@@ -364,11 +384,13 @@ export default function InventoryControlApp() {
   async function startCamera() {
     try {
       if (videoRef.current) {
-        videoRef.current.setAttribute("playsinline", true);
-        videoRef.current.setAttribute("autoplay", true);
-        videoRef.current.setAttribute("muted", true);
+        videoRef.current.setAttribute("playsinline", "true");
+        videoRef.current.setAttribute("autoplay", "true");
+        videoRef.current.setAttribute("muted", "true");
       }
-    } catch {}
+    } catch {
+      // ignore
+    }
 
     try {
       setShowScannerModal(true);
@@ -387,6 +409,7 @@ export default function InventoryControlApp() {
       const scanLoop = async () => {
         const video = videoRef.current;
         const canvas = canvasRef.current;
+
         if (!video || !canvas) {
           scanLoopRef.current = requestAnimationFrame(scanLoop);
           return;
@@ -402,20 +425,16 @@ export default function InventoryControlApp() {
             const detector = new window.BarcodeDetector({ formats: ["qr_code"] });
             const results = await detector.detect(video);
             if (results.length > 0) {
-              const code = results[0].rawValue;
-              handleDecodedValue(code);
+              handleDecodedValue(results[0].rawValue);
               return;
             }
           }
         } catch {
-          // fall through to jsQR fallback
+          // native detector unavailable or failed; continue to jsQR fallback
         }
 
         try {
           const context = canvas.getContext("2d", { willReadFrequently: true });
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
-          // improve scan by focusing center area
           const scanWidth = video.videoWidth * 0.8;
           const scanHeight = video.videoHeight * 0.8;
           const offsetX = (video.videoWidth - scanWidth) / 2;
@@ -507,31 +526,203 @@ export default function InventoryControlApp() {
     setShowScannerModal(false);
   }
 
-  function printLabel(item) {
-    const w = window.open("", "_blank", "width=420,height=520");
-    if (!w) return;
+  function getLabelMarkup(item) {
     const color = TYPE_COLORS[item.type] || "#0f172a";
+    const safeModel = item.model || "";
+    return `
+      <div class="label">
+        <div class="left">
+          <div class="logoWrap">
+            <img src="${LOGO_URL}" alt="${COMPANY_NAME}" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';" crossorigin="anonymous" />
+            <div class="companyFallback" style="display:none;">${COMPANY_NAME}</div>
+          </div>
+          <div class="idRow">
+            <div class="assetId">${item.id}</div>
+            <div class="typePill" style="border-color:${color}; color:${color};">${item.type}</div>
+          </div>
+          ${safeModel ? `<div class="model">${safeModel}</div>` : ""}
+        </div>
+        <div class="right">
+          <div class="qrBox">${document.getElementById(`qr-${item.id}`)?.outerHTML || ""}</div>
+        </div>
+      </div>
+    `;
+  }
+
+  function getPrintStyles() {
+    return `
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 0;
+        font-family: Arial, Helvetica, sans-serif;
+        background: white;
+      }
+      .sheetPage {
+        width: ${AVERY_18160.pageWidthIn}in;
+        min-height: ${AVERY_18160.pageHeightIn}in;
+        padding-top: ${AVERY_18160.marginTopIn}in;
+        padding-left: ${AVERY_18160.marginLeftIn}in;
+        display: grid;
+        grid-template-columns: repeat(${AVERY_18160.columns}, ${AVERY_18160.labelWidthIn}in);
+        grid-auto-rows: ${AVERY_18160.labelHeightIn}in;
+        gap: ${AVERY_18160.gapYIn}in ${AVERY_18160.gapXIn}in;
+        page-break-after: always;
+      }
+      .sheetPage:last-child { page-break-after: auto; }
+      .labelWrap {
+        width: ${AVERY_18160.labelWidthIn}in;
+        height: ${AVERY_18160.labelHeightIn}in;
+        padding: ${LABEL_PRESET.paddingIn}in;
+      }
+      .label {
+        width: 100%;
+        height: 100%;
+        border: 1px solid #d1d5db;
+        border-radius: 18px;
+        overflow: hidden;
+        display: grid;
+        grid-template-columns: 1.05fr 0.95fr;
+        background: #ffffff;
+      }
+      .left {
+        padding: 14px 12px 12px 14px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        min-width: 0;
+      }
+      .logoWrap {
+        height: 54px;
+        display: flex;
+        align-items: center;
+        margin-bottom: 8px;
+      }
+      .logoWrap img {
+        max-width: 100%;
+        max-height: 54px;
+        object-fit: contain;
+        object-position: left center;
+        display: block;
+      }
+      .companyFallback {
+        font-size: 28px;
+        font-weight: 800;
+        letter-spacing: -0.03em;
+        color: #111827;
+      }
+      .idRow {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-top: 2px;
+      }
+      .assetId {
+        font-size: 17px;
+        line-height: 1;
+        font-weight: 800;
+        color: #0f172a;
+        letter-spacing: 0.02em;
+      }
+      .typePill {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        height: 28px;
+        padding: 0 12px;
+        border-radius: 999px;
+        border: 2px solid #0f172a;
+        font-weight: 700;
+        font-size: 12px;
+        white-space: nowrap;
+      }
+      .model {
+        margin-top: 6px;
+        color: #9ca3af;
+        font-size: 10px;
+        line-height: 1.2;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .right {
+        padding: 12px 14px 12px 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .qrBox {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .qrBox svg {
+        width: 100% !important;
+        max-width: 128px;
+        height: auto !important;
+      }
+      @page {
+        size: letter portrait;
+        margin: 0;
+      }
+    `;
+  }
+
+  function printLabel(item) {
+    const w = window.open("", "_blank", "width=700,height=420");
+    if (!w) return;
     w.document.write(`
       <html>
         <head>
           <title>${item.id} Label</title>
-          <style>
-            body { font-family: Arial, sans-serif; padding: 24px; }
-            .label { width: 220px; border: 1px solid #111827; border-radius: 14px; padding: 14px; text-align: center; }
-            .company { font-size: 12px; font-weight: 700; margin-bottom: 4px; }
-            .type { font-size: 12px; font-weight: 700; color: ${color}; margin-bottom: 10px; }
-            .id { font-size: 18px; font-weight: 700; margin-top: 10px; }
-            .sn { font-size: 11px; margin-top: 8px; color: #475569; }
-          </style>
+          <style>${getPrintStyles()}</style>
         </head>
         <body>
-          <div class="label">
-            <div class="company">${COMPANY_NAME}</div>
-            <div class="type">${item.type}</div>
-            <div>${document.getElementById(`qr-${item.id}`)?.outerHTML || ""}</div>
-            <div class="id">${item.id}</div>
-            <div class="sn">${item.manufacturerSN ? `SN: ${item.manufacturerSN}` : ""}</div>
+          <div class="sheetPage">
+            <div class="labelWrap">${getLabelMarkup(item)}</div>
           </div>
+          <script>window.onload = () => window.print();<\/script>
+        </body>
+      </html>
+    `);
+    w.document.close();
+  }
+
+  function printBulkLabels() {
+    const sourceItems = bulkType === "All" ? filteredItems : filteredItems.filter((item) => item.type === bulkType);
+    if (!sourceItems.length) return;
+
+    const labelsPerPage = AVERY_18160.columns * AVERY_18160.rows;
+    const pages = [];
+    for (let i = 0; i < sourceItems.length; i += labelsPerPage) {
+      pages.push(sourceItems.slice(i, i + labelsPerPage));
+    }
+
+    const w = window.open("", "_blank", "width=1100,height=900");
+    if (!w) return;
+
+    const pageMarkup = pages
+      .map(
+        (pageItems) => `
+          <div class="sheetPage">
+            ${pageItems.map((item) => `<div class="labelWrap">${getLabelMarkup(item)}</div>`).join("")}
+          </div>
+        `
+      )
+      .join("");
+
+    w.document.write(`
+      <html>
+        <head>
+          <title>Bulk Labels</title>
+          <style>${getPrintStyles()}</style>
+        </head>
+        <body>
+          ${pageMarkup}
           <script>window.onload = () => window.print();<\/script>
         </body>
       </html>
@@ -546,6 +737,9 @@ export default function InventoryControlApp() {
           <div>
             <h1 style={{ margin: 0, fontSize: 32 }}>{COMPANY_NAME} Inventory</h1>
             <p style={{ margin: "6px 0 0", color: "#64748b" }}>Deployment-safe version with field view and admin data view.</p>
+            <p style={{ margin: "6px 0 0", color: "#94a3b8", fontSize: 12 }}>
+              Logo path is wired to <strong>/ifarm-logo.png</strong> for printed labels.
+            </p>
           </div>
           <div style={styles.actions}>
             <button style={styles.button} onClick={startCamera}>
@@ -564,6 +758,18 @@ export default function InventoryControlApp() {
               style={{ display: "none" }}
               onChange={(e) => scanImageFile(e.target.files?.[0])}
             />
+            <select style={{ ...styles.select, width: 150 }} value={bulkType} onChange={(e) => setBulkType(e.target.value)}>
+              <option value="All">All Labels</option>
+              {TYPES.map((type) => (
+                <option key={type} value={type}>
+                  {type}
+                </option>
+              ))}
+            </select>
+            <button style={styles.button} onClick={printBulkLabels}>
+              <Printer size={16} />
+              Bulk Labels
+            </button>
             <button style={styles.buttonPrimary} onClick={() => setShowAddModal(true)}>
               <Plus size={16} />
               Add Item
@@ -585,22 +791,16 @@ export default function InventoryControlApp() {
               style={{ ...styles.input, ...styles.iconInput }}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by ID, serial number, model, location, status, or assignee"
+              placeholder="Search by ID, serial number, model, bluetooth name, location, status, or assignee"
             />
           </div>
         </div>
 
         <div style={styles.tabs}>
-          <button
-            style={{ ...styles.tab, ...(activeTab === "cards" ? styles.tabActive : {}) }}
-            onClick={() => setActiveTab("cards")}
-          >
+          <button style={{ ...styles.tab, ...(activeTab === "cards" ? styles.tabActive : {}) }} onClick={() => setActiveTab("cards")}>
             Field View
           </button>
-          <button
-            style={{ ...styles.tab, ...(activeTab === "admin" ? styles.tabActive : {}) }}
-            onClick={() => setActiveTab("admin")}
-          >
+          <button style={{ ...styles.tab, ...(activeTab === "admin" ? styles.tabActive : {}) }} onClick={() => setActiveTab("admin")}>
             Admin View
           </button>
         </div>
@@ -617,6 +817,7 @@ export default function InventoryControlApp() {
                     </div>
                     <div style={{ color: "#475569", fontSize: 14 }}>SN: {item.manufacturerSN || "—"}</div>
                     <div style={{ color: "#475569", fontSize: 14 }}>Model: {item.model || "—"}</div>
+                    <div style={{ color: "#475569", fontSize: 14 }}>Bluetooth: {item.bluetoothName || "—"}</div>
                     <div style={{ color: "#475569", fontSize: 14 }}>Location: {item.location || "—"}</div>
                     <div style={{ color: "#475569", fontSize: 14 }}>Status: {item.status || "—"}</div>
                     <div style={{ color: "#475569", fontSize: 14 }}>Assigned To: {item.assignedTo || "—"}</div>
@@ -653,6 +854,7 @@ export default function InventoryControlApp() {
                     <th style={styles.th}>Location</th>
                     <th style={styles.th}>Status</th>
                     <th style={styles.th}>Assigned To</th>
+                    <th style={styles.th}>Bluetooth Name</th>
                     <th style={styles.th}>QR</th>
                     <th style={styles.th}>Actions</th>
                   </tr>
@@ -660,8 +862,12 @@ export default function InventoryControlApp() {
                 <tbody>
                   {filteredItems.map((item) => (
                     <tr key={item.id}>
-                      <td style={styles.td}><strong>{item.id}</strong></td>
-                      <td style={styles.td}><span style={{ color: TYPE_COLORS[item.type], fontWeight: 700 }}>{item.type}</span></td>
+                      <td style={styles.td}>
+                        <strong>{item.id}</strong>
+                      </td>
+                      <td style={styles.td}>
+                        <span style={{ color: TYPE_COLORS[item.type], fontWeight: 700 }}>{item.type}</span>
+                      </td>
                       <td style={styles.td}>
                         <input
                           style={styles.input}
@@ -683,7 +889,9 @@ export default function InventoryControlApp() {
                           onChange={(e) => updateItemField(item.id, "location", e.target.value)}
                         >
                           {LOCATIONS.map((location) => (
-                            <option key={location} value={location}>{location}</option>
+                            <option key={location} value={location}>
+                              {location}
+                            </option>
                           ))}
                         </select>
                       </td>
@@ -694,7 +902,9 @@ export default function InventoryControlApp() {
                           onChange={(e) => updateItemField(item.id, "status", e.target.value)}
                         >
                           {STATUSES.map((status) => (
-                            <option key={status} value={status}>{status}</option>
+                            <option key={status} value={status}>
+                              {status}
+                            </option>
                           ))}
                         </select>
                       </td>
@@ -705,7 +915,16 @@ export default function InventoryControlApp() {
                           onChange={(e) => updateItemField(item.id, "assignedTo", e.target.value)}
                         />
                       </td>
-                      <td style={styles.td}><QRCodeSVG value={item.id} size={50} /></td>
+                      <td style={styles.td}>
+                        <input
+                          style={styles.input}
+                          value={item.bluetoothName || ""}
+                          onChange={(e) => updateItemField(item.id, "bluetoothName", e.target.value)}
+                        />
+                      </td>
+                      <td style={styles.td}>
+                        <QRCodeSVG value={item.id} size={50} />
+                      </td>
                       <td style={styles.td}>
                         <button style={styles.button} onClick={() => deleteItem(item.id)}>
                           <Trash2 size={16} />
@@ -725,7 +944,9 @@ export default function InventoryControlApp() {
             <LabeledInput label="Type">
               <select style={styles.select} value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
                 {TYPES.map((type) => (
-                  <option key={type} value={type}>{type}</option>
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
                 ))}
               </select>
             </LabeledInput>
@@ -748,17 +969,23 @@ export default function InventoryControlApp() {
             </LabeledInput>
 
             <LabeledInput label="Model">
+              <input style={styles.input} value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} />
+            </LabeledInput>
+
+            <LabeledInput label="Bluetooth Name">
               <input
                 style={styles.input}
-                value={form.model}
-                onChange={(e) => setForm({ ...form, model: e.target.value })}
+                value={form.bluetoothName}
+                onChange={(e) => setForm({ ...form, bluetoothName: e.target.value })}
               />
             </LabeledInput>
 
             <LabeledInput label="Location">
               <select style={styles.select} value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })}>
                 {LOCATIONS.map((location) => (
-                  <option key={location} value={location}>{location}</option>
+                  <option key={location} value={location}>
+                    {location}
+                  </option>
                 ))}
               </select>
             </LabeledInput>
@@ -766,7 +993,9 @@ export default function InventoryControlApp() {
             <LabeledInput label="Status">
               <select style={styles.select} value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
                 {STATUSES.map((status) => (
-                  <option key={status} value={status}>{status}</option>
+                  <option key={status} value={status}>
+                    {status}
+                  </option>
                 ))}
               </select>
             </LabeledInput>
