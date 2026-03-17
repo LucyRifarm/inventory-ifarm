@@ -1,4 +1,5 @@
-//update trigger 
+// FORCE NEW BUILD - VERSION 2
+
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import jsQR from "jsqr";
