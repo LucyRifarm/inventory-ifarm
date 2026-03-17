@@ -302,6 +302,7 @@ function LabeledInput({ label, children }) {
       {children}
     </label>
   );
+}
 
 
 function normalizeUppercaseFields(field, value) {
