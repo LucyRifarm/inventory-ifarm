@@ -20,10 +20,11 @@ const STATUSES = ["Available", "Reserved", "In Transit", "In Use", "In Repair", 
 const STORAGE_KEY = "inventory-control-items-v6";
 const COMPANY_NAME = "i-Farm Inc";
 const LOGO_URL = "/ifarm-logo.png";
+const CONTACT_PHONE = "(509) 537-6076"; // replace with your real support/contact number
 const LABEL_PRESET = {
-  widthIn: 4,
-  heightIn: 2,
-  paddingIn: 0.12,
+  widthIn: 2.625,
+  heightIn: 1,
+  paddingIn: 0.03,
 };
 const TYPE_COLORS = {
   Scale: "#3b82f6",
@@ -33,13 +34,13 @@ const TYPE_COLORS = {
 const AVERY_18160 = {
   pageWidthIn: 8.5,
   pageHeightIn: 11,
-  labelWidthIn: 4,
-  labelHeightIn: 2,
-  columns: 2,
-  rows: 5,
-  marginLeftIn: 0.25,
+  labelWidthIn: 2.625,
+  labelHeightIn: 1,
+  columns: 3,
+  rows: 10,
+  marginLeftIn: 0.1875,
   marginTopIn: 0.5,
-  gapXIn: 0,
+  gapXIn: 0.125,
   gapYIn: 0,
 };
 
@@ -536,11 +537,12 @@ export default function InventoryControlApp() {
             <img src="${LOGO_URL}" alt="${COMPANY_NAME}" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';" crossorigin="anonymous" />
             <div class="companyFallback" style="display:none;">${COMPANY_NAME}</div>
           </div>
-          <div class="idRow">
-            <div class="assetId">${item.id}</div>
-            <div class="typePill" style="border-color:${color}; color:${color};">${item.type}</div>
+          <div class="assetId">${item.id}</div>
+          <div class="metaRow">
+            <div class="typeText" style="color:${color};">${item.type}</div>
+            ${safeModel ? `<div class="model">${safeModel}</div>` : ""}
           </div>
-          ${safeModel ? `<div class="model">${safeModel}</div>` : ""}
+          <div class="phone">${CONTACT_PHONE}</div>
         </div>
         <div class="right">
           <div class="qrBox">${document.getElementById(`qr-${item.id}`)?.outerHTML || ""}</div>
@@ -566,7 +568,8 @@ export default function InventoryControlApp() {
         display: grid;
         grid-template-columns: repeat(${AVERY_18160.columns}, ${AVERY_18160.labelWidthIn}in);
         grid-auto-rows: ${AVERY_18160.labelHeightIn}in;
-        gap: ${AVERY_18160.gapYIn}in ${AVERY_18160.gapXIn}in;
+        column-gap: ${AVERY_18160.gapXIn}in;
+        row-gap: ${AVERY_18160.gapYIn}in;
         page-break-after: always;
       }
       .sheetPage:last-child { page-break-after: auto; }
@@ -579,76 +582,75 @@ export default function InventoryControlApp() {
         width: 100%;
         height: 100%;
         border: 1px solid #d1d5db;
-        border-radius: 18px;
+        border-radius: 10px;
         overflow: hidden;
         display: grid;
-        grid-template-columns: 1.05fr 0.95fr;
+        grid-template-columns: 1.5fr 0.9fr;
         background: #ffffff;
       }
       .left {
-        padding: 14px 12px 12px 14px;
+        padding: 0.07in 0.05in 0.06in 0.08in;
         display: flex;
         flex-direction: column;
         justify-content: center;
         min-width: 0;
       }
       .logoWrap {
-        height: 54px;
+        height: 0.22in;
         display: flex;
         align-items: center;
-        margin-bottom: 8px;
+        margin-bottom: 0.03in;
       }
       .logoWrap img {
         max-width: 100%;
-        max-height: 54px;
+        max-height: 0.22in;
         object-fit: contain;
         object-position: left center;
         display: block;
       }
       .companyFallback {
-        font-size: 28px;
+        font-size: 12px;
         font-weight: 800;
-        letter-spacing: -0.03em;
+        letter-spacing: -0.02em;
         color: #111827;
       }
-      .idRow {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        flex-wrap: wrap;
-        margin-top: 2px;
-      }
       .assetId {
-        font-size: 17px;
+        font-size: 12px;
         line-height: 1;
         font-weight: 800;
         color: #0f172a;
-        letter-spacing: 0.02em;
+        letter-spacing: 0.01em;
+        margin-top: 0.01in;
       }
-      .typePill {
-        display: inline-flex;
+      .metaRow {
+        display: flex;
         align-items: center;
-        justify-content: center;
-        height: 28px;
-        padding: 0 12px;
-        border-radius: 999px;
-        border: 2px solid #0f172a;
-        font-weight: 700;
-        font-size: 12px;
+        gap: 6px;
+        flex-wrap: wrap;
+        margin-top: 0.03in;
+      }
+      .typeText {
+        font-weight: 800;
+        font-size: 9px;
         white-space: nowrap;
       }
       .model {
-        margin-top: 6px;
-        color: #9ca3af;
-        font-size: 10px;
-        line-height: 1.2;
+        color: #6b7280;
+        font-size: 8px;
+        line-height: 1.1;
         max-width: 100%;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
       }
+      .phone {
+        margin-top: 0.03in;
+        color: #475569;
+        font-size: 8px;
+        line-height: 1;
+      }
       .right {
-        padding: 12px 14px 12px 8px;
+        padding: 0.05in 0.06in 0.05in 0.02in;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -662,7 +664,7 @@ export default function InventoryControlApp() {
       }
       .qrBox svg {
         width: 100% !important;
-        max-width: 128px;
+        max-width: 0.62in;
         height: auto !important;
       }
       @page {
@@ -738,7 +740,7 @@ export default function InventoryControlApp() {
             <h1 style={{ margin: 0, fontSize: 32 }}>{COMPANY_NAME} Inventory</h1>
             <p style={{ margin: "6px 0 0", color: "#64748b" }}>Deployment-safe version with field view and admin data view.</p>
             <p style={{ margin: "6px 0 0", color: "#94a3b8", fontSize: 12 }}>
-              Logo path is wired to <strong>/ifarm-logo.png</strong> for printed labels.
+              Avery 18160 layout is set to 1&quot; x 2 5/8&quot; labels. Contact phone on labels uses <strong>{CONTACT_PHONE}</strong>.
             </p>
           </div>
           <div style={styles.actions}>
@@ -1031,4 +1033,3 @@ export default function InventoryControlApp() {
     </div>
   );
 }
-
