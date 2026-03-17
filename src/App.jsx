@@ -414,10 +414,18 @@ export default function InventoryControlApp() {
           const context = canvas.getContext("2d", { willReadFrequently: true });
           canvas.width = video.videoWidth;
           canvas.height = video.videoHeight;
-          context.drawImage(video, 0, 0, canvas.width, canvas.height);
+          // improve scan by focusing center area
+          const scanWidth = video.videoWidth * 0.8;
+          const scanHeight = video.videoHeight * 0.8;
+          const offsetX = (video.videoWidth - scanWidth) / 2;
+          const offsetY = (video.videoHeight - scanHeight) / 2;
+
+          canvas.width = scanWidth;
+          canvas.height = scanHeight;
+          context.drawImage(video, offsetX, offsetY, scanWidth, scanHeight, 0, 0, scanWidth, scanHeight);
           const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
           const result = jsQR(imageData.data, imageData.width, imageData.height, {
-            inversionAttempts: "dontInvert",
+            inversionAttempts: "attemptBoth",
           });
 
           if (result?.data) {
