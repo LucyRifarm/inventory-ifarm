@@ -278,6 +278,7 @@ export default function InventoryControlApp() {
   const [activeTab, setActiveTab] = useState("cards");
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
+  const fileInputRef = useRef(null);
   const streamRef = useRef(null);
   const scanLoopRef = useRef(null);
 
@@ -400,9 +401,7 @@ export default function InventoryControlApp() {
             const results = await detector.detect(video);
             if (results.length > 0) {
               const code = results[0].rawValue;
-              setScanResult(code);
-              setSearch(code);
-              stopCamera();
+              handleDecodedValue(code);
               return;
             }
           }
@@ -429,9 +428,7 @@ export default function InventoryControlApp() {
           });
 
           if (result?.data) {
-            setScanResult(result.data);
-            setSearch(result.data);
-            stopCamera();
+            handleDecodedValue(result.data);
             return;
           }
         } catch {
@@ -445,6 +442,50 @@ export default function InventoryControlApp() {
     } catch (error) {
       setShowScannerModal(false);
       setScanResult("Camera access failed. Please check browser permissions.");
+      console.error(error);
+    }
+  }
+
+  function handleDecodedValue(rawValue) {
+    if (!rawValue) return;
+    const value = String(rawValue).trim();
+    setScanResult(value);
+    setSearch(value);
+    stopCamera();
+  }
+
+  async function scanImageFile(file) {
+    if (!file) return;
+    try {
+      const imageUrl = URL.createObjectURL(file);
+      const img = new Image();
+      img.src = imageUrl;
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+      });
+
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const context = canvas.getContext("2d", { willReadFrequently: true });
+      canvas.width = img.naturalWidth || img.width;
+      canvas.height = img.naturalHeight || img.height;
+      context.drawImage(img, 0, 0, canvas.width, canvas.height);
+      const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+      const result = jsQR(imageData.data, imageData.width, imageData.height, {
+        inversionAttempts: "attemptBoth",
+      });
+
+      URL.revokeObjectURL(imageUrl);
+
+      if (result?.data) {
+        handleDecodedValue(result.data);
+        return;
+      }
+
+      setScanResult("Could not read this QR yet. Try a brighter photo or move a little farther back.");
+    } catch (error) {
+      setScanResult("Image scan failed. Please try again.");
       console.error(error);
     }
   }
@@ -509,6 +550,18 @@ export default function InventoryControlApp() {
               <Camera size={16} />
               Scan QR
             </button>
+            <button style={styles.button} onClick={() => fileInputRef.current?.click()}>
+              <Search size={16} />
+              Scan from Photo
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              style={{ display: "none" }}
+              onChange={(e) => scanImageFile(e.target.files?.[0])}
+            />
             <button style={styles.buttonPrimary} onClick={() => setShowAddModal(true)}>
               <Plus size={16} />
               Add Item
@@ -739,7 +792,7 @@ export default function InventoryControlApp() {
             <canvas ref={canvasRef} style={{ display: "none" }} />
             <input style={styles.input} value={scanResult} readOnly placeholder="Scan result will appear here" />
             <div style={{ fontSize: 13, color: "#64748b" }}>
-              On iPhone, the scanner now uses a compatibility fallback if the browser does not support native QR detection.
+              Live camera scanning can still be picky on iPhone. Use <strong>Scan from Photo</strong> for a more reliable fallback.
             </div>
           </div>
         </Modal>
