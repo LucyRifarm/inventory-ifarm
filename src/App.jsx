@@ -20,7 +20,7 @@ const STATUSES = ["Available", "Reserved", "In Transit", "In Use", "In Repair", 
 const STORAGE_KEY = "inventory-control-items-v6";
 const COMPANY_NAME = "i-Farm Inc";
 const LOGO_URL = "/ifarm-logo.png";
-const CONTACT_PHONE = "(509) 537-6076"; // replace with your real support/contact number
+const CONTACT_PHONE = "(509) 537-6076";
 const LABEL_PRESET = {
   widthIn: 2.625,
   heightIn: 1,
@@ -222,7 +222,7 @@ const styles = {
   },
   table: {
     width: "100%",
-    minWidth: 1080,
+    minWidth: 1160,
     borderCollapse: "collapse",
     fontSize: 14,
   },
@@ -273,21 +273,49 @@ function Modal({ open, onClose, title, children }) {
   );
 }
 
-function StatCard({ label, value, color, icon }) {
+function StatCard({ label, value, color, icon, onClick, isActive = false }) {
   return (
-    <div style={{ ...styles.card, ...styles.cardPad }}>
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        ...styles.card,
+        ...styles.cardPad,
+        border: isActive ? `2px solid ${color || "#0f172a"}` : styles.card.border,
+        cursor: onClick ? "pointer" : "default",
+        textAlign: "left",
+      }}
+    >
       <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#64748b", fontSize: 14, fontWeight: 700 }}>
         {icon}
         {label}
       </div>
       <div style={{ ...styles.statNumber, color: color || "#0f172a", marginTop: 8 }}>{value}</div>
-    </div>
+    </button>
   );
 }
 
 function LabeledInput({ label, children }) {
   return <label style={styles.label}>{label}{children}</label>;
 }
+
+function normalizeUppercaseFields(field, value) {
+  return ["manufacturerSN", "model", "bluetoothName"].includes(field)
+    ? String(value).toUpperCase()
+    : value;
+}
+
+function generateNextId(type, items) {
+  const prefix = TYPE_PREFIX[type];
+  const numbers = items
+    .filter((i) => i.type === type)
+    .map((i) => parseInt(String(i.id || "").split("-")[1] || "0", 10))
+    .filter((n) => !Number.isNaN(n));
+  const next = (Math.max(0, ...numbers) + 1).toString().padStart(3, "0");
+  return `${prefix}-${next}`;
+}
+
+export const __testables = { normalizeUppercaseFields, generateNextId };
 
 export default function InventoryControlApp() {
   const [items, setItems] = useState([]);
@@ -298,6 +326,7 @@ export default function InventoryControlApp() {
   const [scanResult, setScanResult] = useState("");
   const [activeTab, setActiveTab] = useState("cards");
   const [bulkType, setBulkType] = useState("All");
+  const [selectedTypeFilter, setSelectedTypeFilter] = useState("All");
   const [selectedItemId, setSelectedItemId] = useState(null);
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -323,22 +352,26 @@ export default function InventoryControlApp() {
 
   const filteredItems = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return items;
-    return items.filter((item) =>
-      [
-        item.id,
-        item.type,
-        item.manufacturerSN,
-        item.model,
-        item.location,
-        item.status,
-        item.assignedTo,
-        item.bluetoothName,
-      ]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(q))
-    );
-  }, [items, search]);
+    return items.filter((item) => {
+      const matchesSearch =
+        !q ||
+        [
+          item.id,
+          item.type,
+          item.manufacturerSN,
+          item.model,
+          item.location,
+          item.status,
+          item.assignedTo,
+          item.bluetoothName,
+        ]
+          .filter(Boolean)
+          .some((value) => String(value).toLowerCase().includes(q));
+
+      const matchesType = selectedTypeFilter === "All" || item.type === selectedTypeFilter;
+      return matchesSearch && matchesType;
+    });
+  }, [items, search, selectedTypeFilter]);
 
   const selectedItem = useMemo(
     () => items.find((item) => item.id === selectedItemId) || null,
@@ -355,23 +388,20 @@ export default function InventoryControlApp() {
     [items]
   );
 
-  function generateNextId(type) {
-    const prefix = TYPE_PREFIX[type];
-    const numbers = items
-      .filter((i) => i.type === type)
-      .map((i) => parseInt(String(i.id || "").split("-")[1] || "0", 10))
-      .filter((n) => !Number.isNaN(n));
-    const next = (Math.max(0, ...numbers) + 1).toString().padStart(3, "0");
-    return `${prefix}-${next}`;
+  function toggleTypeFilter(type) {
+    setSelectedTypeFilter((prev) => (prev === type ? "All" : type));
   }
 
   function handleAddItem() {
-    const id = (form.id || generateNextId(form.type)).trim().toUpperCase();
+    const id = (form.id || generateNextId(form.type, items)).trim().toUpperCase();
     if (!id) return;
     setItems((prev) => [
       {
         ...form,
         id,
+        manufacturerSN: String(form.manufacturerSN || "").toUpperCase(),
+        model: String(form.model || "").toUpperCase(),
+        bluetoothName: String(form.bluetoothName || "").toUpperCase(),
         createdAt: new Date().toISOString(),
       },
       ...prev,
@@ -381,7 +411,8 @@ export default function InventoryControlApp() {
   }
 
   function updateItemField(id, field, value) {
-    setItems((prev) => prev.map((item) => (item.id === id ? { ...item, [field]: value } : item)));
+    const normalizedValue = normalizeUppercaseFields(field, value);
+    setItems((prev) => prev.map((item) => (item.id === id ? { ...item, [field]: normalizedValue } : item)));
   }
 
   function deleteItem(id) {
@@ -446,7 +477,7 @@ export default function InventoryControlApp() {
             }
           }
         } catch {
-          // native detector unavailable or failed; continue to jsQR fallback
+          // continue to jsQR fallback
         }
 
         try {
@@ -489,9 +520,7 @@ export default function InventoryControlApp() {
     setScanResult(value);
     setSearch(value);
     const matchedItem = items.find((item) => String(item.id).toLowerCase() === value.toLowerCase());
-    if (matchedItem) {
-      setSelectedItemId(matchedItem.id);
-    }
+    if (matchedItem) setSelectedItemId(matchedItem.id);
     stopCamera();
   }
 
@@ -693,26 +722,6 @@ export default function InventoryControlApp() {
     `;
   }
 
-  function printLabel(item) {
-    const w = window.open("", "_blank", "width=700,height=420");
-    if (!w) return;
-    w.document.write(`
-      <html>
-        <head>
-          <title>${item.id} Label</title>
-          <style>${getPrintStyles()}</style>
-        </head>
-        <body>
-          <div class="sheetPage">
-            <div class="labelWrap">${getLabelMarkup(item)}</div>
-          </div>
-          <script>window.onload = () => window.print();<\/script>
-        </body>
-      </html>
-    `);
-    w.document.close();
-  }
-
   function printBulkLabels() {
     const sourceItems = bulkType === "All" ? filteredItems : filteredItems.filter((item) => item.type === bulkType);
     if (!sourceItems.length) return;
@@ -799,10 +808,34 @@ export default function InventoryControlApp() {
         </div>
 
         <div style={styles.statGrid}>
-          <StatCard label="Total Assets" value={stats.total} icon={<Package size={16} />} />
-          <StatCard label="Scales" value={stats.scales} color={TYPE_COLORS.Scale} />
-          <StatCard label="Printers" value={stats.printers} color={TYPE_COLORS.Printer} />
-          <StatCard label="Phones" value={stats.phones} color={TYPE_COLORS.Phone} />
+          <StatCard
+            label="Total Assets"
+            value={stats.total}
+            icon={<Package size={16} />}
+            onClick={() => setSelectedTypeFilter("All")}
+            isActive={selectedTypeFilter === "All"}
+          />
+          <StatCard
+            label="Scales"
+            value={stats.scales}
+            color={TYPE_COLORS.Scale}
+            onClick={() => toggleTypeFilter("Scale")}
+            isActive={selectedTypeFilter === "Scale"}
+          />
+          <StatCard
+            label="Printers"
+            value={stats.printers}
+            color={TYPE_COLORS.Printer}
+            onClick={() => toggleTypeFilter("Printer")}
+            isActive={selectedTypeFilter === "Printer"}
+          />
+          <StatCard
+            label="Phones"
+            value={stats.phones}
+            color={TYPE_COLORS.Phone}
+            onClick={() => toggleTypeFilter("Phone")}
+            isActive={selectedTypeFilter === "Phone"}
+          />
         </div>
 
         <div style={{ ...styles.card, ...styles.cardPad }}>
@@ -816,6 +849,12 @@ export default function InventoryControlApp() {
             />
           </div>
         </div>
+
+        {selectedTypeFilter !== "All" && (
+          <div style={{ color: "#475569", fontSize: 14, fontWeight: 700 }}>
+            Filtering by: <span style={{ color: TYPE_COLORS[selectedTypeFilter] }}>{selectedTypeFilter}</span>
+          </div>
+        )}
 
         <div style={styles.tabs}>
           <button style={{ ...styles.tab, ...(activeTab === "cards" ? styles.tabActive : {}) }} onClick={() => setActiveTab("cards")}>
@@ -836,9 +875,6 @@ export default function InventoryControlApp() {
                       <span style={{ fontWeight: 800 }}>{item.id}</span>
                       <span style={{ ...styles.badge, color: TYPE_COLORS[item.type], borderColor: TYPE_COLORS[item.type] }}>{item.type}</span>
                     </div>
-                    <div style={{ color: "#475569", fontSize: 14 }}>SN: {item.manufacturerSN || "—"}</div>
-                    <div style={{ color: "#475569", fontSize: 14 }}>Model: {item.model || "—"}</div>
-                    <div style={{ color: "#475569", fontSize: 14 }}>Bluetooth: {item.bluetoothName || "—"}</div>
                     <div style={{ color: "#475569", fontSize: 14 }}>Location: {item.location || "—"}</div>
                     <div style={{ color: "#475569", fontSize: 14 }}>Status: {item.status || "—"}</div>
                     <div style={{ color: "#475569", fontSize: 14 }}>Assigned To: {item.assignedTo || "—"}</div>
@@ -848,10 +884,6 @@ export default function InventoryControlApp() {
                     <QRCodeSVG id={`qr-${item.id}`} value={item.id} size={92} />
                     <button style={styles.button} onClick={() => openItemEditor(item.id)}>
                       Edit
-                    </button>
-                    <button style={styles.button} onClick={() => printLabel(item)}>
-                      <Printer size={16} />
-                      Label
                     </button>
                   </div>
                 </div>
@@ -886,7 +918,7 @@ export default function InventoryControlApp() {
                 <tbody>
                   {filteredItems.map((item) => (
                     <tr key={item.id}>
-                      <td style={styles.td}>
+                      <td style={{ ...styles.td, minWidth: 120, whiteSpace: "nowrap" }}>
                         <strong>{item.id}</strong>
                       </td>
                       <td style={styles.td}>
@@ -988,19 +1020,23 @@ export default function InventoryControlApp() {
               <input
                 style={styles.input}
                 value={form.manufacturerSN}
-                onChange={(e) => setForm({ ...form, manufacturerSN: e.target.value })}
+                onChange={(e) => setForm({ ...form, manufacturerSN: e.target.value.toUpperCase() })}
               />
             </LabeledInput>
 
             <LabeledInput label="Model">
-              <input style={styles.input} value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} />
+              <input
+                style={styles.input}
+                value={form.model}
+                onChange={(e) => setForm({ ...form, model: e.target.value.toUpperCase() })}
+              />
             </LabeledInput>
 
             <LabeledInput label="Bluetooth Name">
               <input
                 style={styles.input}
                 value={form.bluetoothName}
-                onChange={(e) => setForm({ ...form, bluetoothName: e.target.value })}
+                onChange={(e) => setForm({ ...form, bluetoothName: e.target.value.toUpperCase() })}
               />
             </LabeledInput>
 
@@ -1087,30 +1123,6 @@ export default function InventoryControlApp() {
                   onChange={(e) => updateItemField(selectedItem.id, "assignedTo", e.target.value)}
                 />
               </LabeledInput>
-
-              <LabeledInput label="Bluetooth Name">
-                <input
-                  style={styles.input}
-                  value={selectedItem.bluetoothName || ""}
-                  onChange={(e) => updateItemField(selectedItem.id, "bluetoothName", e.target.value)}
-                />
-              </LabeledInput>
-
-              <LabeledInput label="Model">
-                <input
-                  style={styles.input}
-                  value={selectedItem.model || ""}
-                  onChange={(e) => updateItemField(selectedItem.id, "model", e.target.value)}
-                />
-              </LabeledInput>
-
-              <LabeledInput label="Manufacturer SN">
-                <input
-                  style={styles.input}
-                  value={selectedItem.manufacturerSN || ""}
-                  onChange={(e) => updateItemField(selectedItem.id, "manufacturerSN", e.target.value)}
-                />
-              </LabeledInput>
             </div>
           )}
         </Modal>
@@ -1129,3 +1141,11 @@ export default function InventoryControlApp() {
     </div>
   );
 }
+
+// Lightweight self-checks for core helpers
+console.assert(normalizeUppercaseFields("model", "abc-123") === "ABC-123", "model should normalize to uppercase");
+console.assert(normalizeUppercaseFields("assignedTo", "lucia") === "lucia", "assignedTo should remain unchanged");
+console.assert(
+  generateNextId("Scale", [{ type: "Scale", id: "SC-001" }, { type: "Scale", id: "SC-009" }]) === "SC-010",
+  "generateNextId should increment the largest existing scale ID"
+);
