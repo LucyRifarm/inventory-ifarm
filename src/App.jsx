@@ -296,7 +296,13 @@ function StatCard({ label, value, color, icon, onClick, isActive = false }) {
 }
 
 function LabeledInput({ label, children }) {
-  return <label style={styles.label}>{label}{children}</label>;
+  return (
+    <label style={styles.label}>
+      <span>{label}</span>
+      {children}
+    </label>
+  );
+}>{label}{children}</label>;
 }
 
 function normalizeUppercaseFields(field, value) {
