@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
+import jsQR from "jsqr";
 import {
   Camera,
   Database,
@@ -276,6 +277,7 @@ export default function InventoryControlApp() {
   const [scanResult, setScanResult] = useState("");
   const [activeTab, setActiveTab] = useState("cards");
   const videoRef = useRef(null);
+  const canvasRef = useRef(null);
   const streamRef = useRef(null);
   const scanLoopRef = useRef(null);
 
@@ -357,7 +359,6 @@ export default function InventoryControlApp() {
   }
 
   async function startCamera() {
-    // iPhone / Safari fix: ensure video plays inline
     try {
       if (videoRef.current) {
         videoRef.current.setAttribute("playsinline", true);
@@ -365,7 +366,6 @@ export default function InventoryControlApp() {
         videoRef.current.setAttribute("muted", true);
       }
     } catch {}
-
 
     try {
       setShowScannerModal(true);
@@ -381,12 +381,23 @@ export default function InventoryControlApp() {
         await videoRef.current.play();
       }
 
-      if ("BarcodeDetector" in window) {
-        const detector = new window.BarcodeDetector({ formats: ["qr_code"] });
-        const scanLoop = async () => {
-          if (!videoRef.current || !showScannerModal) return;
-          try {
-            const results = await detector.detect(videoRef.current);
+      const scanLoop = async () => {
+        const video = videoRef.current;
+        const canvas = canvasRef.current;
+        if (!video || !canvas) {
+          scanLoopRef.current = requestAnimationFrame(scanLoop);
+          return;
+        }
+
+        if (video.readyState < 2 || video.videoWidth === 0 || video.videoHeight === 0) {
+          scanLoopRef.current = requestAnimationFrame(scanLoop);
+          return;
+        }
+
+        try {
+          if ("BarcodeDetector" in window) {
+            const detector = new window.BarcodeDetector({ formats: ["qr_code"] });
+            const results = await detector.detect(video);
             if (results.length > 0) {
               const code = results[0].rawValue;
               setScanResult(code);
@@ -394,15 +405,35 @@ export default function InventoryControlApp() {
               stopCamera();
               return;
             }
-          } catch {
-            // keep scanning
           }
-          scanLoopRef.current = requestAnimationFrame(scanLoop);
-        };
+        } catch {
+          // fall through to jsQR fallback
+        }
+
+        try {
+          const context = canvas.getContext("2d", { willReadFrequently: true });
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          context.drawImage(video, 0, 0, canvas.width, canvas.height);
+          const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+          const result = jsQR(imageData.data, imageData.width, imageData.height, {
+            inversionAttempts: "dontInvert",
+          });
+
+          if (result?.data) {
+            setScanResult(result.data);
+            setSearch(result.data);
+            stopCamera();
+            return;
+          }
+        } catch {
+          // keep scanning
+        }
+
         scanLoopRef.current = requestAnimationFrame(scanLoop);
-      } else {
-        setScanResult("Camera opened. This browser does not support automatic QR detection yet.");
-      }
+      };
+
+      scanLoopRef.current = requestAnimationFrame(scanLoop);
     } catch (error) {
       setShowScannerModal(false);
       setScanResult("Camera access failed. Please check browser permissions.");
@@ -697,7 +728,11 @@ export default function InventoryControlApp() {
         <Modal open={showScannerModal} onClose={stopCamera} title="Scan QR">
           <div style={{ display: "grid", gap: 14 }}>
             <video ref={videoRef} style={{ width: "100%", borderRadius: 18, background: "black" }} autoPlay playsInline muted />
+            <canvas ref={canvasRef} style={{ display: "none" }} />
             <input style={styles.input} value={scanResult} readOnly placeholder="Scan result will appear here" />
+            <div style={{ fontSize: 13, color: "#64748b" }}>
+              On iPhone, the scanner now uses a compatibility fallback if the browser does not support native QR detection.
+            </div>
           </div>
         </Modal>
       </div>
