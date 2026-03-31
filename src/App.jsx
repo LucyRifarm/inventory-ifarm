@@ -15,7 +15,7 @@ import {
 const TYPES = ["Scale", "Printer", "Phone"];
 const TYPE_PREFIX = { Scale: "SC", Printer: "PR", Phone: "PH" };
 const LOCATIONS = ["Warehouse", "Office", "Transit", "Customer Site"];
-const STATUSES = ["Available", "Reserved", "In Transit", "In Use", "In Repair", "Missing"];
+const STATUSES = ["Available", "Reserved", "In Transit", "In Use", "In Repair", "Missing", "Sold"];
 const STORAGE_KEY = "inventory-control-items-v6";
 const COMPANY_NAME = "i-Farm Inc";
 const LOGO_URL = "/ifarm-logo.png";
@@ -55,6 +55,63 @@ const EMPTY_FORM = {
 };
 
 const styles = {
+  timelineWrap: {
+    marginTop: 20,
+    borderTop: "1px solid #e2e8f0",
+    paddingTop: 18,
+  },
+  timelineList: {
+    display: "grid",
+    gap: 12,
+    maxHeight: 260,
+    overflowY: "auto",
+    paddingRight: 4,
+  },
+  timelineItem: {
+    display: "grid",
+    gap: 6,
+    padding: 12,
+    border: "1px solid #e2e8f0",
+    borderRadius: 14,
+    background: "#f8fafc",
+  },
+  timelineHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    flexWrap: "wrap",
+  },
+  timelineFieldBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    borderRadius: 999,
+    padding: "4px 10px",
+    fontSize: 12,
+    fontWeight: 700,
+    background: "#e2e8f0",
+    color: "#334155",
+    textTransform: "capitalize",
+  },
+  timelineChange: {
+    fontSize: 14,
+    color: "#334155",
+    lineHeight: 1.4,
+    wordBreak: "break-word",
+  },
+  timelineArrow: {
+    color: "#94a3b8",
+    fontWeight: 800,
+    padding: "0 6px",
+  },
+  timelineEmpty: {
+    padding: 16,
+    border: "1px dashed #cbd5e1",
+    borderRadius: 14,
+    textAlign: "center",
+    color: "#64748b",
+    background: "#f8fafc",
+  },
   page: {
     minHeight: "100vh",
     background: "#f8fafc",
@@ -319,7 +376,78 @@ function generateNextId(type, items) {
   return `${prefix}-${next}`;
 }
 
-export const __testables = { normalizeUppercaseFields, generateNextId };
+function formatHistoryField(field) {
+  if (!field) return "Update";
+  if (field === "assignedTo") return "Assigned To";
+  if (field === "manufacturerSN") return "Manufacturer SN";
+  if (field === "bluetoothName") return "Bluetooth Name";
+  if (field === "created") return "Created";
+  return field.charAt(0).toUpperCase() + field.slice(1);
+}
+
+function formatHistoryValue(value) {
+  return value === undefined || value === null || value === "" ? "—" : String(value);
+}
+
+function formatPendingFieldLabel(field) {
+  return formatHistoryField(field);
+}
+
+function PendingChangesSummary({ changes = [] }) {
+  return (
+    <div style={{ display: "grid", gap: 10 }}>
+      {changes.map((change, index) => (
+        <div key={`${change.field}-${index}`} style={{ ...styles.timelineItem, background: "white" }}>
+          <div style={styles.timelineHeader}>
+            <span style={styles.timelineFieldBadge}>{formatPendingFieldLabel(change.field)}</span>
+          </div>
+          <div style={styles.timelineChange}>
+            <strong>{formatHistoryValue(change.from)}</strong>
+            <span style={styles.timelineArrow}>→</span>
+            <strong>{formatHistoryValue(change.to)}</strong>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function HistoryTimeline({ history = [] }) {
+  if (!history.length) {
+    return <div style={styles.timelineEmpty}>No movement history yet.</div>;
+  }
+
+  return (
+    <div style={styles.timelineList}>
+      {history.map((entry, index) => {
+        const isCreated = entry.field === "created";
+        return (
+          <div key={`${entry.date}-${entry.field}-${index}`} style={styles.timelineItem}>
+            <div style={styles.timelineHeader}>
+              <span style={styles.timelineFieldBadge}>{formatHistoryField(entry.field)}</span>
+              <span style={{ fontSize: 12, color: "#64748b", fontWeight: 600 }}>
+                {entry.date ? new Date(entry.date).toLocaleString() : "—"}
+              </span>
+            </div>
+            <div style={styles.timelineChange}>
+              {isCreated ? (
+                <strong>{formatHistoryValue(entry.to)}</strong>
+              ) : (
+                <>
+                  <strong>{formatHistoryValue(entry.from)}</strong>
+                  <span style={styles.timelineArrow}>→</span>
+                  <strong>{formatHistoryValue(entry.to)}</strong>
+                </>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+export const __testables = { normalizeUppercaseFields, generateNextId, formatHistoryField, formatHistoryValue, formatPendingFieldLabel };
 
 export default function InventoryControlApp() {
   const [items, setItems] = useState([]);
@@ -332,6 +460,8 @@ export default function InventoryControlApp() {
   const [bulkType, setBulkType] = useState("All");
   const [selectedTypeFilter, setSelectedTypeFilter] = useState("All");
   const [selectedItemId, setSelectedItemId] = useState(null);
+  const [draftItem, setDraftItem] = useState(null);
+  const [pendingChange, setPendingChange] = useState(null);
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -454,7 +584,7 @@ export default function InventoryControlApp() {
     setShowAddModal(false);
   }
 
-  function updateItemField(id, field, value) {
+  function applyItemFieldUpdate(id, field, value) {
     setItems((prev) =>
       prev.map((item) => {
         if (item.id !== id) return item;
@@ -480,17 +610,75 @@ export default function InventoryControlApp() {
     );
   }
 
+  function updateItemField(id, field, value) {
+    setDraftItem((prev) => ({
+      ...(prev || {}),
+      [field]: normalizeUppercaseFields(field, value),
+    }));
+  }
+
+  function buildPendingChanges(item, draft) {
+    if (!item || !draft) return [];
+
+    return ["status", "location", "assignedTo"]
+      .map((field) => {
+        const from = item[field] || "";
+        const to = draft[field] || "";
+        if (from === to) return null;
+        return {
+          field,
+          from,
+          to,
+        };
+      })
+      .filter(Boolean);
+  }
+
+  function requestSaveItemUpdates() {
+    if (!selectedItem || !draftItem) return;
+    const changes = buildPendingChanges(selectedItem, draftItem);
+    if (!changes.length) return;
+
+    setPendingChange({
+      id: selectedItem.id,
+      changes,
+    });
+  }
+
+  function confirmPendingChange() {
+    if (!pendingChange?.changes?.length) return;
+
+    pendingChange.changes.forEach((change) => {
+      applyItemFieldUpdate(pendingChange.id, change.field, change.to);
+    });
+
+    setPendingChange(null);
+    closeItemEditor();
+  }
+
+  function cancelPendingChange() {
+    setPendingChange(null);
+  }
+
   function deleteItem(id) {
     setItems((prev) => prev.filter((item) => item.id !== id));
     if (selectedItemId === id) setSelectedItemId(null);
   }
 
   function openItemEditor(id) {
+    const item = items.find((entry) => entry.id === id);
+    if (!item) return;
     setSelectedItemId(id);
+    setDraftItem({
+      status: item.status || "Available",
+      location: item.location || "Warehouse",
+      assignedTo: item.assignedTo || "",
+    });
   }
 
   function closeItemEditor() {
     setSelectedItemId(null);
+    setDraftItem(null);
   }
 
   async function startCamera() {
@@ -954,13 +1142,7 @@ export default function InventoryControlApp() {
                   <div style={styles.qrBox}>
                     <QRCodeSVG id={`qr-${item.id}`} value={item.id} size={92} />
                     <button style={styles.button} onClick={() => openItemEditor(item.id)}>
-                      Edit
-                    </button>
-                    <button style={styles.button} onClick={() => updateItemField(item.id, "status", "In Use")}>
-                      In Use
-                    </button>
-                    <button style={styles.button} onClick={() => updateItemField(item.id, "location", "Transit")}>
-                      Transit
+                      Update Item
                     </button>
                   </div>
                 </div>
@@ -1155,52 +1337,78 @@ export default function InventoryControlApp() {
         </Modal>
 
         <Modal open={selectedItem !== null} onClose={closeItemEditor} title={selectedItem ? `Update ${selectedItem.id}` : "Update Item"}>
-          {selectedItem && (
-            <div style={styles.formGrid}>
-              <LabeledInput label="Item ID">
-                <input style={styles.input} value={selectedItem.id} readOnly />
-              </LabeledInput>
+          {selectedItem && draftItem && (
+            <>
+              <div style={styles.formGrid}>
+                <LabeledInput label="Item ID">
+                  <input style={styles.input} value={selectedItem.id} readOnly />
+                </LabeledInput>
 
-              <LabeledInput label="Type">
-                <input style={styles.input} value={selectedItem.type} readOnly />
-              </LabeledInput>
+                <LabeledInput label="Type">
+                  <input style={styles.input} value={selectedItem.type} readOnly />
+                </LabeledInput>
 
-              <LabeledInput label="Status">
-                <select
-                  style={styles.select}
-                  value={selectedItem.status || "Available"}
-                  onChange={(e) => updateItemField(selectedItem.id, "status", e.target.value)}
-                >
-                  {STATUSES.map((status) => (
-                    <option key={status} value={status}>
-                      {status}
-                    </option>
-                  ))}
-                </select>
-              </LabeledInput>
+                <LabeledInput label="Status">
+                  <select
+                    style={styles.select}
+                    value={draftItem.status || "Available"}
+                    onChange={(e) => updateItemField(selectedItem.id, "status", e.target.value)}
+                  >
+                    {STATUSES.map((status) => (
+                      <option key={status} value={status}>
+                        {status}
+                      </option>
+                    ))}
+                  </select>
+                </LabeledInput>
 
-              <LabeledInput label="Location">
-                <select
-                  style={styles.select}
-                  value={selectedItem.location || "Warehouse"}
-                  onChange={(e) => updateItemField(selectedItem.id, "location", e.target.value)}
-                >
-                  {LOCATIONS.map((location) => (
-                    <option key={location} value={location}>
-                      {location}
-                    </option>
-                  ))}
-                </select>
-              </LabeledInput>
+                <LabeledInput label="Location">
+                  <select
+                    style={styles.select}
+                    value={draftItem.location || "Warehouse"}
+                    onChange={(e) => updateItemField(selectedItem.id, "location", e.target.value)}
+                  >
+                    {LOCATIONS.map((location) => (
+                      <option key={location} value={location}>
+                        {location}
+                      </option>
+                    ))}
+                  </select>
+                </LabeledInput>
 
-              <LabeledInput label="Assigned To">
-                <input
-                  style={styles.input}
-                  value={selectedItem.assignedTo || ""}
-                  onChange={(e) => updateItemField(selectedItem.id, "assignedTo", e.target.value)}
-                />
-              </LabeledInput>
-            </div>
+                <LabeledInput label="Assigned To">
+                  <input
+                    style={styles.input}
+                    value={draftItem.assignedTo || ""}
+                    onChange={(e) => updateItemField(selectedItem.id, "assignedTo", e.target.value)}
+                  />
+                </LabeledInput>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 18, flexWrap: "wrap" }}>
+                <button style={styles.button} onClick={closeItemEditor}>
+                  Cancel
+                </button>
+                <button style={styles.buttonPrimary} onClick={requestSaveItemUpdates}>
+                  Save Changes
+                </button>
+              </div>
+
+              <div style={styles.timelineWrap}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
+                  <div>
+                    <div style={{ fontSize: 16, fontWeight: 800 }}>Movement History</div>
+                    <div style={{ fontSize: 13, color: "#64748b", marginTop: 4 }}>
+                      Latest changes first for quick traceability.
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 12, color: "#94a3b8", fontWeight: 700 }}>
+                    {selectedItem.history?.length || 0} event{selectedItem.history?.length === 1 ? "" : "s"}
+                  </div>
+                </div>
+                <HistoryTimeline history={selectedItem.history || []} />
+              </div>
+            </>
           )}
         </Modal>
 
@@ -1213,6 +1421,40 @@ export default function InventoryControlApp() {
               Live camera scanning can still be picky on iPhone. Use <strong>Scan from Photo</strong> for a more reliable fallback.
             </div>
           </div>
+        </Modal>
+
+        <Modal open={pendingChange !== null} onClose={cancelPendingChange} title="Confirm Update">
+          {pendingChange && (
+            <div style={{ display: "grid", gap: 16 }}>
+              <div style={{ fontSize: 14, color: "#475569", lineHeight: 1.5 }}>
+                Please review these changes before saving them.
+              </div>
+
+              <div style={{ ...styles.card, ...styles.cardPad, background: "#f8fafc" }}>
+                <div style={{ display: "grid", gap: 10 }}>
+                  <div>
+                    <span style={{ fontSize: 12, color: "#64748b", fontWeight: 700 }}>Item</span>
+                    <div style={{ fontSize: 16, fontWeight: 800 }}>{pendingChange.id}</div>
+                  </div>
+                  <div>
+                    <span style={{ fontSize: 12, color: "#64748b", fontWeight: 700 }}>Summary</span>
+                    <div style={{ fontSize: 15, fontWeight: 700 }}>{pendingChange.changes.length} change{pendingChange.changes.length === 1 ? "" : "s"} ready to save</div>
+                  </div>
+                </div>
+              </div>
+
+              <PendingChangesSummary changes={pendingChange.changes} />
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, flexWrap: "wrap" }}>
+                <button style={styles.button} onClick={cancelPendingChange}>
+                  Back
+                </button>
+                <button style={styles.buttonPrimary} onClick={confirmPendingChange}>
+                  Confirm
+                </button>
+              </div>
+            </div>
+          )}
         </Modal>
       </div>
     </div>
