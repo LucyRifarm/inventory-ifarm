@@ -56,6 +56,73 @@ const EMPTY_FORM = {
 };
 
 const styles = {
+  board: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+    gap: 16,
+  },
+  boardColumn: {
+    background: "#f1f5f9",
+    border: "1px solid #e2e8f0",
+    borderRadius: 18,
+    padding: 12,
+    display: "flex",
+    flexDirection: "column",
+    minHeight: 320,
+    maxHeight: 560,
+  },
+  boardHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+    marginBottom: 12,
+  },
+  boardTitle: {
+    fontSize: 14,
+    fontWeight: 800,
+    color: "#0f172a",
+  },
+  boardCount: {
+    fontSize: 12,
+    fontWeight: 700,
+    color: "#64748b",
+    background: "white",
+    border: "1px solid #e2e8f0",
+    borderRadius: 999,
+    padding: "4px 8px",
+  },
+  boardBody: {
+    display: "grid",
+    gap: 10,
+    overflowY: "auto",
+    paddingRight: 2,
+  },
+  boardCard: {
+    background: "white",
+    borderRadius: 14,
+    padding: 12,
+    border: "1px solid #e2e8f0",
+    cursor: "pointer",
+    display: "grid",
+    gap: 6,
+    textAlign: "left",
+  },
+  boardMetaText: {
+    fontSize: 13,
+    color: "#475569",
+    lineHeight: 1.35,
+    wordBreak: "break-word",
+  },
+  boardEmpty: {
+    border: "1px dashed #cbd5e1",
+    borderRadius: 14,
+    padding: 14,
+    textAlign: "center",
+    color: "#94a3b8",
+    background: "rgba(255,255,255,0.6)",
+    fontSize: 13,
+  },
   timelineWrap: {
     marginTop: 20,
     borderTop: "1px solid #e2e8f0",
@@ -414,6 +481,56 @@ function PendingChangesSummary({ changes = [] }) {
   );
 }
 
+function BoardView({ items, onOpenItem }) {
+  return (
+    <div style={styles.board}>
+      {STATUSES.map((status) => {
+        const statusItems = items.filter((item) => item.status === status);
+        return (
+          <div key={status} style={styles.boardColumn}>
+            <div style={styles.boardHeader}>
+              <div style={styles.boardTitle}>{status}</div>
+              <div style={styles.boardCount}>{statusItems.length}</div>
+            </div>
+
+            <div style={styles.boardBody}>
+              {statusItems.length === 0 ? (
+                <div style={styles.boardEmpty}>No items here.</div>
+              ) : (
+                statusItems.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    style={styles.boardCard}
+                    onClick={() => onOpenItem(item.id)}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 15, fontWeight: 800 }}>{item.id}</span>
+                      <span
+                        style={{
+                          ...styles.badge,
+                          color: TYPE_COLORS[item.type],
+                          borderColor: TYPE_COLORS[item.type],
+                          width: "fit-content",
+                        }}
+                      >
+                        {item.type}
+                      </span>
+                    </div>
+                    <div style={styles.boardMetaText}><strong>Location:</strong> {item.location || "—"}</div>
+                    <div style={styles.boardMetaText}><strong>Assigned:</strong> {item.assignedTo || "—"}</div>
+                    <div style={styles.boardMetaText}><strong>Notes:</strong> {item.notes || "—"}</div>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function HistoryTimeline({ history = [] }) {
   if (!history.length) {
     return <div style={styles.timelineEmpty}>No movement history yet.</div>;
@@ -459,6 +576,7 @@ export default function InventoryControlApp() {
   const [search, setSearch] = useState("");
   const [scanResult, setScanResult] = useState("");
   const [activeTab, setActiveTab] = useState("cards");
+  const [fieldViewMode, setFieldViewMode] = useState("cards");
   const [bulkType, setBulkType] = useState("All");
   const [selectedTypeFilter, setSelectedTypeFilter] = useState("All");
   const [selectedItemId, setSelectedItemId] = useState(null);
@@ -1138,16 +1256,30 @@ function stopCamera() {
           </div>
         )}
 
-        <div style={styles.tabs}>
-          <button style={{ ...styles.tab, ...(activeTab === "cards" ? styles.tabActive : {}) }} onClick={() => setActiveTab("cards")}>
-            Field View
-          </button>
-          <button style={{ ...styles.tab, ...(activeTab === "admin" ? styles.tabActive : {}) }} onClick={() => setActiveTab("admin")}>
-            Admin View
-          </button>
+        <div style={{ ...styles.row, alignItems: "center" }}>
+          <div style={styles.tabs}>
+            <button style={{ ...styles.tab, ...(activeTab === "cards" ? styles.tabActive : {}) }} onClick={() => setActiveTab("cards")}>
+              Field View
+            </button>
+            <button style={{ ...styles.tab, ...(activeTab === "admin" ? styles.tabActive : {}) }} onClick={() => setActiveTab("admin")}>
+              Admin View
+            </button>
+          </div>
+
+          {activeTab === "cards" && (
+            <div style={styles.tabs}>
+              <button style={{ ...styles.tab, ...(fieldViewMode === "cards" ? styles.tabActive : {}) }} onClick={() => setFieldViewMode("cards")}>
+                Card View
+              </button>
+              <button style={{ ...styles.tab, ...(fieldViewMode === "board" ? styles.tabActive : {}) }} onClick={() => setFieldViewMode("board")}>
+                Board View
+              </button>
+            </div>
+          )}
         </div>
 
         {activeTab === "cards" ? (
+          fieldViewMode === "cards" ? (
           <div style={styles.itemGrid}>
             {filteredItems.map((item) => (
               <div key={item.id} style={{ ...styles.card, ...styles.cardPad }}>
@@ -1160,6 +1292,7 @@ function stopCamera() {
                     <div style={{ color: "#475569", fontSize: 14 }}>Location: {item.location || "—"}</div>
                     <div style={{ color: "#475569", fontSize: 14 }}>Status: {item.status || "—"}</div>
                     <div style={{ color: "#475569", fontSize: 14 }}>Assigned To: {item.assignedTo || "—"}</div>
+                    <div style={{ color: "#475569", fontSize: 14 }}>Notes: {item.notes || "—"}</div>
                     <div style={{ color: "#94a3b8", fontSize: 12 }}>
                       Updated: {item.lastUpdated ? new Date(item.lastUpdated).toLocaleString() : "—"}
                     </div>
@@ -1178,6 +1311,9 @@ function stopCamera() {
               <div style={{ ...styles.card, ...styles.cardPad, textAlign: "center", color: "#64748b" }}>No data found.</div>
             )}
           </div>
+          ) : (
+            <BoardView items={filteredItems} onOpenItem={openItemEditor} />
+          )
         ) : (
           <div style={{ ...styles.card, ...styles.cardPad }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14, fontWeight: 800 }}>
