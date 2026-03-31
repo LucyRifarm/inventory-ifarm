@@ -1,4 +1,3 @@
-// FORCE NEW BUILD - VERSION 2
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import jsQR from "jsqr";
@@ -323,6 +322,30 @@ function generateNextId(type, items) {
 
 export const __testables = { normalizeUppercaseFields, generateNextId };
 
+function exportCSV() {
+    const headers = ["ID","Type","Location","Status","Assigned To","Model","SN"];
+    const rows = items.map(i => [
+      i.id,
+      i.type,
+      i.location,
+      i.status,
+      i.assignedTo,
+      i.model,
+      i.manufacturerSN
+    ]);
+
+    const csv = [headers, ...rows].map(r => r.map(v => `"${v || ""}"`).join(",")).join("
+");
+
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "inventory.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
 export default function InventoryControlApp() {
   const [items, setItems] = useState([]);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -401,6 +424,9 @@ export default function InventoryControlApp() {
   function handleAddItem() {
     const id = (form.id || generateNextId(form.type, items)).trim().toUpperCase();
     if (!id) return;
+
+    const now = new Date().toISOString();
+
     setItems((prev) => [
       {
         ...form,
@@ -408,8 +434,23 @@ export default function InventoryControlApp() {
         manufacturerSN: String(form.manufacturerSN || "").toUpperCase(),
         model: String(form.model || "").toUpperCase(),
         bluetoothName: String(form.bluetoothName || "").toUpperCase(),
-        createdAt: new Date().toISOString(),
+        createdAt: now,
+        lastUpdated: now,
+        history: [
+          {
+            date: now,
+            field: "created",
+            from: "",
+            to: "Item created",
+          },
+        ],
       },
+      ...prev,
+    ]);
+
+    setForm(EMPTY_FORM);
+    setShowAddModal(false);
+  },
       ...prev,
     ]);
     setForm(EMPTY_FORM);
@@ -417,8 +458,31 @@ export default function InventoryControlApp() {
   }
 
   function updateItemField(id, field, value) {
-    const normalizedValue = normalizeUppercaseFields(field, value);
-    setItems((prev) => prev.map((item) => (item.id === id ? { ...item, [field]: normalizedValue } : item)));
+    setItems((prev) =>
+      prev.map((item) => {
+        if (item.id !== id) return item;
+
+        const normalizedValue = normalizeUppercaseFields(field, value);
+        const oldValue = item[field];
+
+        if (oldValue === normalizedValue) return item;
+
+        const historyEntry = {
+          date: new Date().toISOString(),
+          field,
+          from: oldValue || "",
+          to: normalizedValue || "",
+        };
+
+        return {
+          ...item,
+          [field]: normalizedValue,
+          history: [historyEntry, ...(item.history || [])],
+          lastUpdated: new Date().toISOString(),
+        };
+      })
+    );
+  } : item)));
   }
 
   function deleteItem(id) {
@@ -806,6 +870,9 @@ export default function InventoryControlApp() {
               <Printer size={16} />
               Bulk Labels
             </button>
+            <button style={styles.button} onClick={exportCSV}>
+              <Database size={16} /> Export CSV
+            </button>
             <button style={styles.buttonPrimary} onClick={() => setShowAddModal(true)}>
               <Plus size={16} />
               Add Item
@@ -884,12 +951,21 @@ export default function InventoryControlApp() {
                     <div style={{ color: "#475569", fontSize: 14 }}>Location: {item.location || "—"}</div>
                     <div style={{ color: "#475569", fontSize: 14 }}>Status: {item.status || "—"}</div>
                     <div style={{ color: "#475569", fontSize: 14 }}>Assigned To: {item.assignedTo || "—"}</div>
+                    <div style={{ color: "#94a3b8", fontSize: 12 }}>
+                      Updated: {item.lastUpdated ? new Date(item.lastUpdated).toLocaleString() : "—"}
+                    </div>
                   </div>
 
                   <div style={styles.qrBox}>
                     <QRCodeSVG id={`qr-${item.id}`} value={item.id} size={92} />
                     <button style={styles.button} onClick={() => openItemEditor(item.id)}>
                       Edit
+                    </button>
+                    <button style={styles.button} onClick={() => updateItemField(item.id, "status", "In Use")}>
+                      In Use
+                    </button>
+                    <button style={styles.button} onClick={() => updateItemField(item.id, "location", "Transit")}>
+                      Transit
                     </button>
                   </div>
                 </div>
