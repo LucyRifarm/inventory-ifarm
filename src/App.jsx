@@ -16,7 +16,7 @@ const TYPES = ["Scale", "Printer", "Phone"];
 const TYPE_PREFIX = { Scale: "SC", Printer: "PR", Phone: "PH" };
 const LOCATIONS = ["Warehouse", "Office", "Transit", "Customer Site"];
 const STATUSES = ["Available", "Reserved", "In Transit", "In Use", "In Repair", "Missing", "Sold"];
-const STORAGE_KEY = "inventory-control-items-v6";
+const STORAGE_KEY = "inventory-control-items-v8";
 const COMPANY_NAME = "i-Farm Inc";
 const LOGO_URL = "/ifarm-logo.png";
 const CONTACT_PHONE = "(509) 537-6076";
@@ -29,6 +29,11 @@ const TYPE_COLORS = {
   Scale: "#3b82f6",
   Printer: "#6b7280",
   Phone: "#8b5cf6",
+};
+const STATUS_COLORS = {
+  Missing: "#cc0000",
+  "In Repair": "#d1d6dc",
+  Sold: "#009a4d",
 };
 const AVERY_18160 = {
   pageWidthIn: 8.5,
@@ -43,6 +48,12 @@ const AVERY_18160 = {
   gapYIn: 0,
 };
 
+const DEFAULT_WEEKLY_RATES = {
+  Scale: 150,
+  Printer: 90,
+  Phone: 75,
+};
+
 const EMPTY_FORM = {
   type: "Scale",
   id: "",
@@ -53,132 +64,38 @@ const EMPTY_FORM = {
   status: "Available",
   assignedTo: "",
   notes: "",
+  weeklyRate: DEFAULT_WEEKLY_RATES.Scale,
 };
 
 const styles = {
-  board: {
+  summaryChangeCard: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-    gap: 16,
-  },
-  boardColumn: {
-    background: "#f1f5f9",
-    border: "1px solid #e2e8f0",
-    borderRadius: 18,
-    padding: 12,
-    display: "flex",
-    flexDirection: "column",
-    minHeight: 320,
-    maxHeight: 560,
-  },
-  boardHeader: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
     gap: 8,
-    marginBottom: 12,
-  },
-  boardTitle: {
-    fontSize: 14,
-    fontWeight: 800,
-    color: "#0f172a",
-  },
-  boardCount: {
-    fontSize: 12,
-    fontWeight: 700,
-    color: "#64748b",
-    background: "white",
-    border: "1px solid #e2e8f0",
-    borderRadius: 999,
-    padding: "4px 8px",
-  },
-  boardBody: {
-    display: "grid",
-    gap: 10,
-    overflowY: "auto",
-    paddingRight: 2,
-  },
-  boardCard: {
-    background: "white",
-    borderRadius: 14,
-    padding: 12,
-    border: "1px solid #e2e8f0",
-    cursor: "pointer",
-    display: "grid",
-    gap: 6,
-    textAlign: "left",
-  },
-  boardMetaText: {
-    fontSize: 13,
-    color: "#475569",
-    lineHeight: 1.35,
-    wordBreak: "break-word",
-  },
-  boardEmpty: {
-    border: "1px dashed #cbd5e1",
-    borderRadius: 14,
-    padding: 14,
-    textAlign: "center",
-    color: "#94a3b8",
-    background: "rgba(255,255,255,0.6)",
-    fontSize: 13,
-  },
-  timelineWrap: {
-    marginTop: 20,
-    borderTop: "1px solid #e2e8f0",
-    paddingTop: 18,
-  },
-  timelineList: {
-    display: "grid",
-    gap: 12,
-    maxHeight: 260,
-    overflowY: "auto",
-    paddingRight: 4,
-  },
-  timelineItem: {
-    display: "grid",
-    gap: 6,
     padding: 12,
     border: "1px solid #e2e8f0",
     borderRadius: 14,
-    background: "#f8fafc",
+    background: "white",
   },
-  timelineHeader: {
+  summaryChangeHeader: {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 10,
-    flexWrap: "wrap",
   },
-  timelineFieldBadge: {
+  summaryRemoveButton: {
     display: "inline-flex",
     alignItems: "center",
+    justifyContent: "center",
+    width: 28,
+    height: 28,
     borderRadius: 999,
-    padding: "4px 10px",
-    fontSize: 12,
-    fontWeight: 700,
-    background: "#e2e8f0",
-    color: "#334155",
-    textTransform: "capitalize",
-  },
-  timelineChange: {
-    fontSize: 14,
-    color: "#334155",
-    lineHeight: 1.4,
-    wordBreak: "break-word",
-  },
-  timelineArrow: {
-    color: "#94a3b8",
-    fontWeight: 800,
-    padding: "0 6px",
-  },
-  timelineEmpty: {
-    padding: 16,
-    border: "1px dashed #cbd5e1",
-    borderRadius: 14,
-    textAlign: "center",
+    border: "1px solid #cbd5e1",
+    background: "white",
+    cursor: "pointer",
     color: "#64748b",
-    background: "#f8fafc",
+    fontWeight: 800,
+    fontSize: 14,
+    lineHeight: 1,
   },
   page: {
     minHeight: "100vh",
@@ -208,6 +125,7 @@ const styles = {
   button: {
     display: "inline-flex",
     alignItems: "center",
+    justifyContent: "center",
     gap: 8,
     border: "1px solid #cbd5e1",
     background: "white",
@@ -220,6 +138,7 @@ const styles = {
   buttonPrimary: {
     display: "inline-flex",
     alignItems: "center",
+    justifyContent: "center",
     gap: 8,
     border: "1px solid #0f172a",
     background: "#0f172a",
@@ -346,7 +265,7 @@ const styles = {
   },
   table: {
     width: "100%",
-    minWidth: 1160,
+    minWidth: 1320,
     borderCollapse: "collapse",
     fontSize: 14,
   },
@@ -376,6 +295,162 @@ const styles = {
     flexDirection: "column",
     alignItems: "center",
     gap: 10,
+  },
+  timelineWrap: {
+    marginTop: 20,
+    borderTop: "1px solid #e2e8f0",
+    paddingTop: 18,
+  },
+  timelineList: {
+    display: "grid",
+    gap: 12,
+    maxHeight: 260,
+    overflowY: "auto",
+    paddingRight: 4,
+  },
+  timelineItem: {
+    display: "grid",
+    gap: 6,
+    padding: 12,
+    border: "1px solid #e2e8f0",
+    borderRadius: 14,
+    background: "#f8fafc",
+  },
+  timelineHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    flexWrap: "wrap",
+  },
+  timelineFieldBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    borderRadius: 999,
+    padding: "4px 10px",
+    fontSize: 12,
+    fontWeight: 700,
+    background: "#e2e8f0",
+    color: "#334155",
+    textTransform: "capitalize",
+  },
+  timelineChange: {
+    fontSize: 14,
+    color: "#334155",
+    lineHeight: 1.4,
+    wordBreak: "break-word",
+  },
+  timelineArrow: {
+    color: "#94a3b8",
+    fontWeight: 800,
+    padding: "0 6px",
+  },
+  timelineEmpty: {
+    padding: 16,
+    border: "1px dashed #cbd5e1",
+    borderRadius: 14,
+    textAlign: "center",
+    color: "#64748b",
+    background: "#f8fafc",
+  },
+  board: {
+    display: "grid",
+    gap: 16,
+  },
+  boardRow: {
+    display: "grid",
+    gap: 16,
+    alignItems: "start",
+  },
+  boardColumn: {
+    background: "#f1f5f9",
+    border: "1px solid #e2e8f0",
+    borderRadius: 18,
+    padding: 12,
+    display: "flex",
+    flexDirection: "column",
+    minHeight: 320,
+    maxHeight: 560,
+  },
+  boardHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+    marginBottom: 12,
+  },
+  boardTitle: {
+    fontSize: 14,
+    fontWeight: 800,
+    color: "#0f172a",
+  },
+  boardCount: {
+    fontSize: 12,
+    fontWeight: 700,
+    color: "#64748b",
+    background: "white",
+    border: "1px solid #e2e8f0",
+    borderRadius: 999,
+    padding: "4px 8px",
+  },
+  boardBody: {
+    display: "grid",
+    gap: 10,
+    overflowY: "auto",
+    paddingRight: 2,
+  },
+  boardCard: {
+    background: "white",
+    borderRadius: 14,
+    padding: 12,
+    border: "1px solid #e2e8f0",
+    cursor: "pointer",
+    display: "grid",
+    gap: 6,
+    textAlign: "left",
+  },
+  boardMetaText: {
+    fontSize: 13,
+    color: "#475569",
+    lineHeight: 1.35,
+    wordBreak: "break-word",
+  },
+  boardEmpty: {
+    border: "1px dashed #cbd5e1",
+    borderRadius: 14,
+    padding: 14,
+    textAlign: "center",
+    color: "#94a3b8",
+    background: "rgba(255,255,255,0.6)",
+    fontSize: 13,
+  },
+  dashboardGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+    gap: 14,
+  },
+  dashboardList: {
+    display: "grid",
+    gap: 10,
+  },
+  dashboardRow: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    padding: "10px 0",
+    borderBottom: "1px solid #e2e8f0",
+  },
+  dashboardLabel: {
+    fontSize: 14,
+    color: "#475569",
+    fontWeight: 600,
+  },
+  dashboardValue: {
+    fontSize: 14,
+    color: "#0f172a",
+    fontWeight: 800,
+    textAlign: "right",
   },
 };
 
@@ -434,6 +509,14 @@ function normalizeUppercaseFields(field, value) {
     : value;
 }
 
+function normalizeFieldValue(field, value) {
+  if (field === "weeklyRate") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return normalizeUppercaseFields(field, value);
+}
+
 function generateNextId(type, items) {
   const prefix = TYPE_PREFIX[type];
   const numbers = items
@@ -451,6 +534,7 @@ function formatHistoryField(field) {
   if (field === "bluetoothName") return "Bluetooth Name";
   if (field === "created") return "Created";
   if (field === "notes") return "Notes";
+  if (field === "weeklyRate") return "Weekly Rate";
   return field.charAt(0).toUpperCase() + field.slice(1);
 }
 
@@ -462,13 +546,95 @@ function formatPendingFieldLabel(field) {
   return formatHistoryField(field);
 }
 
-function PendingChangesSummary({ changes = [] }) {
+function groupHistoryEntries(history = []) {
+  const groups = [];
+
+  history.forEach((entry, index) => {
+    const batchId = entry.batchId || `legacy-${entry.date || "no-date"}-${index}`;
+    const lastGroup = groups[groups.length - 1];
+
+    if (lastGroup && lastGroup.batchId === batchId) {
+      lastGroup.entries.push(entry);
+      return;
+    }
+
+    groups.push({
+      batchId,
+      date: entry.date,
+      entries: [entry],
+    });
+  });
+
+  return groups;
+}
+
+function HistoryTimeline({ history = [] }) {
+  if (!history.length) {
+    return <div style={styles.timelineEmpty}>No movement history yet.</div>;
+  }
+
+  const groupedHistory = groupHistoryEntries(history);
+
+  return (
+    <div style={styles.timelineList}>
+      {groupedHistory.map((group, groupIndex) => {
+        const isSingleCreatedGroup = group.entries.length === 1 && group.entries[0]?.field === "created";
+
+        return (
+          <div key={`${group.batchId}-${groupIndex}`} style={styles.timelineItem}>
+            <div style={styles.timelineHeader}>
+              <span style={styles.timelineFieldBadge}>
+                {isSingleCreatedGroup ? "Created" : `Edition ${groupedHistory.length - groupIndex}`}
+              </span>
+              <span style={{ fontSize: 12, color: "#64748b", fontWeight: 600 }}>
+                {group.date ? new Date(group.date).toLocaleString() : "—"}
+              </span>
+            </div>
+
+            <div style={{ display: "grid", gap: 8 }}>
+              {group.entries.map((entry, entryIndex) => {
+                const isCreated = entry.field === "created";
+                return (
+                  <div key={`${entry.field}-${entry.date}-${entryIndex}`} style={styles.timelineChange}>
+                    <div style={{ marginBottom: 4, fontSize: 12, fontWeight: 700, color: "#64748b" }}>
+                      {formatHistoryField(entry.field)}
+                    </div>
+                    {isCreated ? (
+                      <strong>{formatHistoryValue(entry.to)}</strong>
+                    ) : (
+                      <>
+                        <strong>{formatHistoryValue(entry.from)}</strong>
+                        <span style={styles.timelineArrow}>→</span>
+                        <strong>{formatHistoryValue(entry.to)}</strong>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function PendingChangesSummary({ changes = [], onRemoveChange }) {
   return (
     <div style={{ display: "grid", gap: 10 }}>
       {changes.map((change, index) => (
-        <div key={`${change.field}-${index}`} style={{ ...styles.timelineItem, background: "white" }}>
-          <div style={styles.timelineHeader}>
+        <div key={`${change.field}-${index}`} style={styles.summaryChangeCard}>
+          <div style={styles.summaryChangeHeader}>
             <span style={styles.timelineFieldBadge}>{formatPendingFieldLabel(change.field)}</span>
+            <button
+              type="button"
+              style={styles.summaryRemoveButton}
+              onClick={() => onRemoveChange?.(change.field)}
+              aria-label={`Remove ${formatPendingFieldLabel(change.field)} change`}
+              title="Remove this change"
+            >
+              ×
+            </button>
           </div>
           <div style={styles.timelineChange}>
             <strong>{formatHistoryValue(change.from)}</strong>
@@ -482,91 +648,140 @@ function PendingChangesSummary({ changes = [] }) {
 }
 
 function BoardView({ items, onOpenItem }) {
+  const boardRows = [
+    ["Available", "Reserved", "In Transit", "In Use"],
+    ["In Repair", "Missing", "Sold"],
+  ];
+
   return (
     <div style={styles.board}>
-      {STATUSES.map((status) => {
-        const statusItems = items.filter((item) => item.status === status);
-        return (
-          <div key={status} style={styles.boardColumn}>
-            <div style={styles.boardHeader}>
-              <div style={styles.boardTitle}>{status}</div>
-              <div style={styles.boardCount}>{statusItems.length}</div>
-            </div>
+      {boardRows.map((row, rowIndex) => (
+        <div
+          key={`board-row-${rowIndex}`}
+          style={{
+            ...styles.boardRow,
+            gridTemplateColumns: `repeat(${row.length}, minmax(0, 1fr))`,
+          }}
+        >
+          {row.map((status) => {
+            const statusItems = items.filter((item) => item.status === status);
+            return (
+              <div
+                key={status}
+                style={{
+                  ...styles.boardColumn,
+                  borderColor: STATUS_COLORS[status] || "#e2e8f0",
+                  borderWidth: STATUS_COLORS[status] ? 2 : 1,
+                }}
+              >
+                <div style={styles.boardHeader}>
+                  <div style={{ ...styles.boardTitle, color: STATUS_COLORS[status] || "#0f172a" }}>{status}</div>
+                  <div style={styles.boardCount}>{statusItems.length}</div>
+                </div>
 
-            <div style={styles.boardBody}>
-              {statusItems.length === 0 ? (
-                <div style={styles.boardEmpty}>No items here.</div>
-              ) : (
-                statusItems.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    style={styles.boardCard}
-                    onClick={() => onOpenItem(item.id)}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                      <span style={{ fontSize: 15, fontWeight: 800 }}>{item.id}</span>
-                      <span
-                        style={{
-                          ...styles.badge,
-                          color: TYPE_COLORS[item.type],
-                          borderColor: TYPE_COLORS[item.type],
-                          width: "fit-content",
-                        }}
+                <div style={styles.boardBody}>
+                  {statusItems.length === 0 ? (
+                    <div style={styles.boardEmpty}>No items here.</div>
+                  ) : (
+                    statusItems.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        style={styles.boardCard}
+                        onClick={() => onOpenItem(item.id)}
                       >
-                        {item.type}
-                      </span>
-                    </div>
-                    <div style={styles.boardMetaText}><strong>Location:</strong> {item.location || "—"}</div>
-                    <div style={styles.boardMetaText}><strong>Assigned:</strong> {item.assignedTo || "—"}</div>
-                    <div style={styles.boardMetaText}><strong>Notes:</strong> {item.notes || "—"}</div>
-                  </button>
-                ))
-              )}
-            </div>
-          </div>
-        );
-      })}
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                          <span style={{ fontSize: 15, fontWeight: 800 }}>{item.id}</span>
+                          <span
+                            style={{
+                              ...styles.badge,
+                              color: TYPE_COLORS[item.type],
+                              borderColor: TYPE_COLORS[item.type],
+                              width: "fit-content",
+                            }}
+                          >
+                            {item.type}
+                          </span>
+                        </div>
+                        <div style={styles.boardMetaText}><strong>Location:</strong> {item.location || "—"}</div>
+                        <div style={styles.boardMetaText}><strong>Assigned:</strong> {item.assignedTo || "—"}</div>
+                        <div style={styles.boardMetaText}><strong>Notes:</strong> {item.notes || "—"}</div>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ))}
     </div>
   );
 }
 
-function HistoryTimeline({ history = [] }) {
-  if (!history.length) {
-    return <div style={styles.timelineEmpty}>No movement history yet.</div>;
+function getStatusSinceDate(item) {
+  if (!item?.history?.length) return item?.createdAt || null;
+  for (const entry of item.history) {
+    if (entry.field === "status") return entry.date;
+  }
+  return item.createdAt || null;
+}
+
+function getDaysInCurrentStatus(item, now = new Date()) {
+  const since = getStatusSinceDate(item);
+  if (!since) return 0;
+  const diffMs = now.getTime() - new Date(since).getTime();
+  return Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+}
+
+function formatCurrency(value) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(Number(value || 0));
+}
+
+function getLeaseStartDate(item) {
+  if (!item?.history?.length) {
+    return ["In Use", "In Transit"].includes(item?.status) ? item?.createdAt || null : null;
   }
 
-  return (
-    <div style={styles.timelineList}>
-      {history.map((entry, index) => {
-        const isCreated = entry.field === "created";
-        return (
-          <div key={`${entry.date}-${entry.field}-${index}`} style={styles.timelineItem}>
-            <div style={styles.timelineHeader}>
-              <span style={styles.timelineFieldBadge}>{formatHistoryField(entry.field)}</span>
-              <span style={{ fontSize: 12, color: "#64748b", fontWeight: 600 }}>
-                {entry.date ? new Date(entry.date).toLocaleString() : "—"}
-              </span>
-            </div>
-            <div style={styles.timelineChange}>
-              {isCreated ? (
-                <strong>{formatHistoryValue(entry.to)}</strong>
-              ) : (
-                <>
-                  <strong>{formatHistoryValue(entry.from)}</strong>
-                  <span style={styles.timelineArrow}>→</span>
-                  <strong>{formatHistoryValue(entry.to)}</strong>
-                </>
-              )}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
+  let leaseStart = null;
+  const ordered = [...item.history].reverse();
+  ordered.forEach((entry) => {
+    if (entry.field !== "status") return;
+    if (["In Use", "In Transit"].includes(entry.to)) leaseStart = entry.date;
+    if (["Available", "Reserved", "Missing", "Sold", "In Repair"].includes(entry.to)) leaseStart = null;
+  });
+
+  if (!leaseStart && ["In Use", "In Transit"].includes(item.status)) {
+    return item.createdAt || null;
+  }
+  return leaseStart;
 }
 
-export const __testables = { normalizeUppercaseFields, generateNextId, formatHistoryField, formatHistoryValue, formatPendingFieldLabel };
+function getAccumulatedLeaseValue(item, now = new Date()) {
+  const start = getLeaseStartDate(item);
+  if (!start) return 0;
+  const diffMs = now.getTime() - new Date(start).getTime();
+  const weeks = diffMs / (1000 * 60 * 60 * 24 * 7);
+  return Number(item.weeklyRate || 0) * Math.max(0, weeks);
+}
+
+export const __testables = {
+  normalizeUppercaseFields,
+  normalizeFieldValue,
+  generateNextId,
+  formatHistoryField,
+  formatHistoryValue,
+  formatPendingFieldLabel,
+  groupHistoryEntries,
+  getStatusSinceDate,
+  getDaysInCurrentStatus,
+  getLeaseStartDate,
+  getAccumulatedLeaseValue,
+};
 
 export default function InventoryControlApp() {
   const [items, setItems] = useState([]);
@@ -577,6 +792,7 @@ export default function InventoryControlApp() {
   const [scanResult, setScanResult] = useState("");
   const [activeTab, setActiveTab] = useState("cards");
   const [fieldViewMode, setFieldViewMode] = useState("cards");
+  const [adminViewMode, setAdminViewMode] = useState("table");
   const [bulkType, setBulkType] = useState("All");
   const [selectedTypeFilter, setSelectedTypeFilter] = useState("All");
   const [selectedItemId, setSelectedItemId] = useState(null);
@@ -618,6 +834,7 @@ export default function InventoryControlApp() {
           item.status,
           item.assignedTo,
           item.bluetoothName,
+          item.notes,
         ]
           .filter(Boolean)
           .some((value) => String(value).toLowerCase().includes(q));
@@ -627,10 +844,7 @@ export default function InventoryControlApp() {
     });
   }, [items, search, selectedTypeFilter]);
 
-  const selectedItem = useMemo(
-    () => items.find((item) => item.id === selectedItemId) || null,
-    [items, selectedItemId]
-  );
+  const selectedItem = useMemo(() => items.find((item) => item.id === selectedItemId) || null, [items, selectedItemId]);
 
   const stats = useMemo(
     () => ({
@@ -642,8 +856,67 @@ export default function InventoryControlApp() {
     [items]
   );
 
+  const dashboard = useMemo(() => {
+    const touchedByDay = {};
+    const locationCounts = {};
+    const assignedCounts = {};
+    let leasedValueInField = 0;
+    let accumulatedLeaseValue = 0;
+
+    items.forEach((item) => {
+      const uniqueDates = new Set(
+        (item.history || [])
+          .map((entry) => (entry?.date ? new Date(entry.date).toDateString() : null))
+          .filter(Boolean)
+      );
+
+      uniqueDates.forEach((dateKey) => {
+        touchedByDay[dateKey] = (touchedByDay[dateKey] || 0) + 1;
+      });
+
+      if (item.location) locationCounts[item.location] = (locationCounts[item.location] || 0) + 1;
+      if (item.assignedTo) assignedCounts[item.assignedTo] = (assignedCounts[item.assignedTo] || 0) + 1;
+
+      if (["In Use", "In Transit"].includes(item.status)) {
+        leasedValueInField += Number(item.weeklyRate || 0);
+      }
+
+      accumulatedLeaseValue += getAccumulatedLeaseValue(item);
+    });
+
+    const touchedEntries = Object.entries(touchedByDay).sort((a, b) => new Date(b[0]) - new Date(a[0]));
+    const updatesPerDay = touchedEntries.slice(0, 7);
+    const mostActiveLocation = Object.entries(locationCounts).sort((a, b) => b[1] - a[1])[0] || null;
+    const topAssigned = Object.entries(assignedCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    const statusDurations = items
+      .map((item) => ({ id: item.id, status: item.status, days: getDaysInCurrentStatus(item) }))
+      .sort((a, b) => b.days - a.days)
+      .slice(0, 5);
+
+    return {
+      updatesPerDay,
+      mostActiveLocation,
+      topAssigned,
+      statusDurations,
+      leasedValueInField,
+      accumulatedLeaseValue,
+    };
+  }, [items]);
+
   function exportCSV() {
-    const headers = ["ID", "Type", "Location", "Status", "Assigned To", "Model", "SN", "Bluetooth Name", "Last Updated"];
+    const headers = [
+      "ID",
+      "Type",
+      "Location",
+      "Status",
+      "Assigned To",
+      "Model",
+      "SN",
+      "Bluetooth Name",
+      "Notes",
+      "Weekly Rate",
+      "Last Updated",
+    ];
     const rows = items.map((i) => [
       i.id,
       i.type,
@@ -653,6 +926,8 @@ export default function InventoryControlApp() {
       i.model,
       i.manufacturerSN,
       i.bluetoothName,
+      i.notes,
+      i.weeklyRate,
       i.lastUpdated,
     ]);
 
@@ -687,11 +962,13 @@ export default function InventoryControlApp() {
         model: String(form.model || "").toUpperCase(),
         bluetoothName: String(form.bluetoothName || "").toUpperCase(),
         notes: String(form.notes || "").trim(),
+        weeklyRate: Number(form.weeklyRate || DEFAULT_WEEKLY_RATES[form.type] || 0),
         createdAt: now,
         lastUpdated: now,
         history: [
           {
             date: now,
+            batchId: `batch-${Date.now()}-created`,
             field: "created",
             from: "",
             to: "Item created",
@@ -701,21 +978,25 @@ export default function InventoryControlApp() {
       ...prev,
     ]);
 
-    setForm(EMPTY_FORM);
+    setForm({ ...EMPTY_FORM, weeklyRate: DEFAULT_WEEKLY_RATES.Scale });
     setShowAddModal(false);
   }
 
   function applyItemFieldUpdate(id, field, value) {
+    const batchId = `batch-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const timestamp = new Date().toISOString();
+
     setItems((prev) =>
       prev.map((item) => {
         if (item.id !== id) return item;
 
-        const normalizedValue = normalizeUppercaseFields(field, value);
+        const normalizedValue = normalizeFieldValue(field, value);
         const oldValue = item[field];
         if (oldValue === normalizedValue) return item;
 
         const historyEntry = {
-          date: new Date().toISOString(),
+          date: timestamp,
+          batchId,
           field,
           from: oldValue || "",
           to: normalizedValue || "",
@@ -725,32 +1006,67 @@ export default function InventoryControlApp() {
           ...item,
           [field]: normalizedValue,
           history: [historyEntry, ...(item.history || [])],
-          lastUpdated: new Date().toISOString(),
+          lastUpdated: timestamp,
         };
       })
     );
   }
 
-  function updateItemField(id, field, value) {
+  function applyItemChangesBatch(id, changes) {
+    if (!changes?.length) return;
+
+    const batchId = `batch-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const timestamp = new Date().toISOString();
+
+    setItems((prev) =>
+      prev.map((item) => {
+        if (item.id !== id) return item;
+
+        const nextItem = { ...item };
+        const batchEntries = [];
+
+        changes.forEach((change) => {
+          const normalizedValue = normalizeFieldValue(change.field, change.to);
+          const oldValue = nextItem[change.field];
+          if (oldValue === normalizedValue) return;
+
+          nextItem[change.field] = normalizedValue;
+          batchEntries.push({
+            date: timestamp,
+            batchId,
+            field: change.field,
+            from: oldValue || "",
+            to: normalizedValue || "",
+          });
+        });
+
+        if (!batchEntries.length) return item;
+
+        return {
+          ...nextItem,
+          history: [...batchEntries, ...(item.history || [])],
+          lastUpdated: timestamp,
+        };
+      })
+    );
+  }
+
+  function updateItemField(_id, field, value) {
     setDraftItem((prev) => ({
       ...(prev || {}),
-      [field]: normalizeUppercaseFields(field, value),
+      [field]: normalizeFieldValue(field, value),
     }));
   }
 
   function buildPendingChanges(item, draft) {
     if (!item || !draft) return [];
 
-    return ["status", "location", "assignedTo", "notes"]
+    return ["status", "location", "assignedTo", "notes", "weeklyRate"]
       .map((field) => {
-        const from = item[field] || "";
-        const to = draft[field] || "";
+        const from = item[field] ?? "";
+        const to = draft[field] ?? "";
         if (from === to) return null;
-        return {
-          field,
-          from,
-          to,
-        };
+        return { field, from, to };
       })
       .filter(Boolean);
   }
@@ -759,20 +1075,12 @@ export default function InventoryControlApp() {
     if (!selectedItem || !draftItem) return;
     const changes = buildPendingChanges(selectedItem, draftItem);
     if (!changes.length) return;
-
-    setPendingChange({
-      id: selectedItem.id,
-      changes,
-    });
+    setPendingChange({ id: selectedItem.id, changes });
   }
 
   function confirmPendingChange() {
     if (!pendingChange?.changes?.length) return;
-
-    pendingChange.changes.forEach((change) => {
-      applyItemFieldUpdate(pendingChange.id, change.field, change.to);
-    });
-
+    applyItemChangesBatch(pendingChange.id, pendingChange.changes);
     setPendingChange(null);
     closeItemEditor();
   }
@@ -781,12 +1089,21 @@ export default function InventoryControlApp() {
     setPendingChange(null);
   }
 
+  function removePendingChange(field) {
+    setPendingChange((prev) => {
+      if (!prev?.changes?.length) return prev;
+      const nextChanges = prev.changes.filter((change) => change.field !== field);
+      if (!nextChanges.length) return null;
+      return { ...prev, changes: nextChanges };
+    });
+  }
+
   function handleAdminTextCommit(id, field, value) {
     const item = items.find((entry) => entry.id === id);
     if (!item) return;
 
-    const normalizedValue = normalizeUppercaseFields(field, value);
-    const oldValue = item[field] || "";
+    const normalizedValue = normalizeFieldValue(field, value);
+    const oldValue = item[field] ?? "";
     if (oldValue === normalizedValue) return;
 
     applyItemFieldUpdate(id, field, normalizedValue);
@@ -794,7 +1111,7 @@ export default function InventoryControlApp() {
 
   function deleteItem(id) {
     setItems((prev) => prev.filter((item) => item.id !== id));
-    if (selectedItemId === id) setSelectedItemId(null);
+    if (selectedItemId === id) closeItemEditor();
   }
 
   function openItemEditor(id) {
@@ -806,6 +1123,7 @@ export default function InventoryControlApp() {
       location: item.location || "Warehouse",
       assignedTo: item.assignedTo || "",
       notes: item.notes || "",
+      weeklyRate: Number(item.weeklyRate || DEFAULT_WEEKLY_RATES[item.type] || 0),
     });
   }
 
@@ -827,7 +1145,7 @@ export default function InventoryControlApp() {
 
     try {
       setShowScannerModal(true);
-      handleScanResult($1);
+      setScanResult("");
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: { ideal: "environment" } },
         audio: false,
@@ -857,8 +1175,8 @@ export default function InventoryControlApp() {
           if ("BarcodeDetector" in window) {
             const detector = new window.BarcodeDetector({ formats: ["qr_code"] });
             const results = await detector.detect(video);
-            if (results.length > 0) {
-              handleDecodedValue(results[0].rawValue);
+            if (results.length > 0 && results[0]?.rawValue) {
+              handleSuccessfulScanResult(results[0].rawValue);
               return;
             }
           }
@@ -882,7 +1200,7 @@ export default function InventoryControlApp() {
           });
 
           if (result?.data) {
-            handleDecodedValue(result.data);
+            handleSuccessfulScanResult(result.data);
             return;
           }
         } catch {
@@ -895,18 +1213,18 @@ export default function InventoryControlApp() {
       scanLoopRef.current = requestAnimationFrame(scanLoop);
     } catch (error) {
       setShowScannerModal(false);
-      handleScanResult($1);
+      setScanResult("Camera access failed. Please check browser permissions.");
       console.error(error);
     }
   }
 
-  function handleDecodedValue(rawValue) {
+  function handleSuccessfulScanResult(rawValue) {
     if (!rawValue) return;
     const value = String(rawValue).trim();
-    handleScanResult($1);
+    setScanResult(value);
     setSearch(value);
     const matchedItem = items.find((item) => String(item.id).toLowerCase() === value.toLowerCase());
-    if (matchedItem) setSelectedItemId(matchedItem.id);
+    if (matchedItem) openItemEditor(matchedItem.id);
     stopCamera();
   }
 
@@ -935,29 +1253,18 @@ export default function InventoryControlApp() {
       URL.revokeObjectURL(imageUrl);
 
       if (result?.data) {
-        handleDecodedValue(result.data);
+        handleSuccessfulScanResult(result.data);
         return;
       }
 
-      handleScanResult($1);
+      setScanResult("Could not read this QR yet. Try a brighter photo or move a little farther back.");
     } catch (error) {
-      handleScanResult($1);
+      setScanResult("Image scan failed. Please try again.");
       console.error(error);
     }
   }
 
-  function handleScanResult(result) {
-  handleScanResult($1);
-
-  const item = items.find((entry) => entry.id === result);
-  if (item) {
-    openItemEditor(item.id);
-  }
-
-  stopCamera();
-}
-
-function stopCamera() {
+  function stopCamera() {
     if (scanLoopRef.current) {
       cancelAnimationFrame(scanLoopRef.current);
       scanLoopRef.current = null;
@@ -1163,7 +1470,9 @@ function stopCamera() {
         <div style={styles.row}>
           <div>
             <h1 style={{ margin: 0, fontSize: 32 }}>{COMPANY_NAME} Inventory</h1>
-            <p style={{ margin: "6px 0 0", color: "#64748b" }}>Deployment-safe version with field view and admin data view.</p>
+            <p style={{ margin: "6px 0 0", color: "#64748b" }}>
+              Deployment-safe version with field view, admin controls, timeline, board view, and leasing dashboard.
+            </p>
             <p style={{ margin: "6px 0 0", color: "#94a3b8", fontSize: 12 }}>
               Avery 18160 layout is set to 1&quot; x 2 5/8&quot; labels. Contact phone on labels uses <strong>{CONTACT_PHONE}</strong>.
             </p>
@@ -1207,6 +1516,66 @@ function stopCamera() {
           </div>
         </div>
 
+        <div style={styles.dashboardGrid}>
+          <StatCard label="Leased in Field" value={formatCurrency(dashboard.leasedValueInField)} />
+          <StatCard label="Accumulated Lease" value={formatCurrency(dashboard.accumulatedLeaseValue)} />
+          <StatCard
+            label="Top Location"
+            value={dashboard.mostActiveLocation ? `${dashboard.mostActiveLocation[0]} (${dashboard.mostActiveLocation[1]})` : "—"}
+          />
+          <StatCard label="Updated Today" value={dashboard.updatesPerDay[0]?.[1] || 0} />
+        </div>
+
+        <div style={styles.dashboardGrid}>
+          <div style={{ ...styles.card, ...styles.cardPad }}>
+            <div style={{ fontWeight: 800, marginBottom: 10 }}>Items Updated Per Day</div>
+            <div style={styles.dashboardList}>
+              {dashboard.updatesPerDay.length ? (
+                dashboard.updatesPerDay.map(([dateKey, count]) => (
+                  <div key={dateKey} style={styles.dashboardRow}>
+                    <span style={styles.dashboardLabel}>{dateKey}</span>
+                    <span style={styles.dashboardValue}>{count}</span>
+                  </div>
+                ))
+              ) : (
+                <div style={styles.dashboardLabel}>No activity yet.</div>
+              )}
+            </div>
+          </div>
+
+          <div style={{ ...styles.card, ...styles.cardPad }}>
+            <div style={{ fontWeight: 800, marginBottom: 10 }}>Assigned To Top 5</div>
+            <div style={styles.dashboardList}>
+              {dashboard.topAssigned.length ? (
+                dashboard.topAssigned.map(([name, count]) => (
+                  <div key={name} style={styles.dashboardRow}>
+                    <span style={styles.dashboardLabel}>{name}</span>
+                    <span style={styles.dashboardValue}>{count}</span>
+                  </div>
+                ))
+              ) : (
+                <div style={styles.dashboardLabel}>No assignments yet.</div>
+              )}
+            </div>
+          </div>
+
+          <div style={{ ...styles.card, ...styles.cardPad }}>
+            <div style={{ fontWeight: 800, marginBottom: 10 }}>Time in Current Status</div>
+            <div style={styles.dashboardList}>
+              {dashboard.statusDurations.length ? (
+                dashboard.statusDurations.map((entry) => (
+                  <div key={entry.id} style={styles.dashboardRow}>
+                    <span style={styles.dashboardLabel}>{entry.id} · {entry.status}</span>
+                    <span style={styles.dashboardValue}>{entry.days} day{entry.days === 1 ? "" : "s"}</span>
+                  </div>
+                ))
+              ) : (
+                <div style={styles.dashboardLabel}>No status history yet.</div>
+              )}
+            </div>
+          </div>
+        </div>
+
         <div style={styles.statGrid}>
           <StatCard
             label="Total Assets"
@@ -1245,7 +1614,7 @@ function stopCamera() {
               style={{ ...styles.input, ...styles.iconInput }}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by ID, serial number, model, bluetooth name, location, status, or assignee"
+              placeholder="Search by ID, serial number, model, bluetooth name, location, status, assignee, or notes"
             />
           </div>
         </div>
@@ -1266,54 +1635,68 @@ function stopCamera() {
             </button>
           </div>
 
-          {activeTab === "cards" && (
-            <div style={styles.tabs}>
-              <button style={{ ...styles.tab, ...(fieldViewMode === "cards" ? styles.tabActive : {}) }} onClick={() => setFieldViewMode("cards")}>
-                Card View
-              </button>
-              <button style={{ ...styles.tab, ...(fieldViewMode === "board" ? styles.tabActive : {}) }} onClick={() => setFieldViewMode("board")}>
-                Board View
-              </button>
-            </div>
-          )}
+          <div style={styles.tabs}>
+            {activeTab === "cards" ? (
+              <>
+                <button style={{ ...styles.tab, ...(fieldViewMode === "cards" ? styles.tabActive : {}) }} onClick={() => setFieldViewMode("cards")}>
+                  Card View
+                </button>
+                <button style={{ ...styles.tab, ...(fieldViewMode === "board" ? styles.tabActive : {}) }} onClick={() => setFieldViewMode("board")}>
+                  Board View
+                </button>
+              </>
+            ) : (
+              <>
+                <button style={{ ...styles.tab, ...(adminViewMode === "table" ? styles.tabActive : {}) }} onClick={() => setAdminViewMode("table")}>
+                  Table View
+                </button>
+                <button style={{ ...styles.tab, ...(adminViewMode === "board" ? styles.tabActive : {}) }} onClick={() => setAdminViewMode("board")}>
+                  Board View
+                </button>
+              </>
+            )}
+          </div>
         </div>
 
         {activeTab === "cards" ? (
           fieldViewMode === "cards" ? (
-          <div style={styles.itemGrid}>
-            {filteredItems.map((item) => (
-              <div key={item.id} style={{ ...styles.card, ...styles.cardPad }}>
-                <div style={styles.itemCard}>
-                  <div style={styles.itemMeta}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                      <span style={{ fontWeight: 800 }}>{item.id}</span>
-                      <span style={{ ...styles.badge, color: TYPE_COLORS[item.type], borderColor: TYPE_COLORS[item.type] }}>{item.type}</span>
+            <div style={styles.itemGrid}>
+              {filteredItems.map((item) => (
+                <div key={item.id} style={{ ...styles.card, ...styles.cardPad }}>
+                  <div style={styles.itemCard}>
+                    <div style={styles.itemMeta}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                        <span style={{ fontWeight: 800 }}>{item.id}</span>
+                        <span style={{ ...styles.badge, color: TYPE_COLORS[item.type], borderColor: TYPE_COLORS[item.type] }}>{item.type}</span>
+                      </div>
+                      <div style={{ color: "#475569", fontSize: 14 }}>Location: {item.location || "—"}</div>
+                      <div style={{ color: "#475569", fontSize: 14 }}>Status: {item.status || "—"}</div>
+                      <div style={{ color: "#475569", fontSize: 14 }}>Assigned To: {item.assignedTo || "—"}</div>
+                      <div style={{ color: "#475569", fontSize: 14 }}>Notes: {item.notes || "—"}</div>
+                      <div style={{ color: "#475569", fontSize: 14 }}>Weekly Rate: {formatCurrency(item.weeklyRate || 0)}</div>
+                      <div style={{ color: "#94a3b8", fontSize: 12 }}>
+                        Updated: {item.lastUpdated ? new Date(item.lastUpdated).toLocaleString() : "—"}
+                      </div>
                     </div>
-                    <div style={{ color: "#475569", fontSize: 14 }}>Location: {item.location || "—"}</div>
-                    <div style={{ color: "#475569", fontSize: 14 }}>Status: {item.status || "—"}</div>
-                    <div style={{ color: "#475569", fontSize: 14 }}>Assigned To: {item.assignedTo || "—"}</div>
-                    <div style={{ color: "#475569", fontSize: 14 }}>Notes: {item.notes || "—"}</div>
-                    <div style={{ color: "#94a3b8", fontSize: 12 }}>
-                      Updated: {item.lastUpdated ? new Date(item.lastUpdated).toLocaleString() : "—"}
-                    </div>
-                  </div>
 
-                  <div style={styles.qrBox}>
-                    <QRCodeSVG id={`qr-${item.id}`} value={item.id} size={92} />
-                    <button style={styles.button} onClick={() => openItemEditor(item.id)}>
-                      Update Item
-                    </button>
+                    <div style={styles.qrBox}>
+                      <QRCodeSVG id={`qr-${item.id}`} value={item.id} size={92} />
+                      <button style={styles.button} onClick={() => openItemEditor(item.id)}>
+                        Update Item
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-            {filteredItems.length === 0 && (
-              <div style={{ ...styles.card, ...styles.cardPad, textAlign: "center", color: "#64748b" }}>No data found.</div>
-            )}
-          </div>
+              ))}
+              {filteredItems.length === 0 && (
+                <div style={{ ...styles.card, ...styles.cardPad, textAlign: "center", color: "#64748b" }}>No data found.</div>
+              )}
+            </div>
           ) : (
             <BoardView items={filteredItems} onOpenItem={openItemEditor} />
           )
+        ) : adminViewMode === "board" ? (
+          <BoardView items={filteredItems} onOpenItem={openItemEditor} />
         ) : (
           <div style={{ ...styles.card, ...styles.cardPad }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14, fontWeight: 800 }}>
@@ -1332,6 +1715,8 @@ function stopCamera() {
                     <th style={styles.th}>Status</th>
                     <th style={styles.th}>Assigned To</th>
                     <th style={styles.th}>Bluetooth Name</th>
+                    <th style={styles.th}>Notes</th>
+                    <th style={styles.th}>Weekly Rate</th>
                     <th style={styles.th}>QR</th>
                     <th style={styles.th}>Actions</th>
                   </tr>
@@ -1369,7 +1754,7 @@ function stopCamera() {
                         <select
                           style={styles.select}
                           value={item.location || "Warehouse"}
-                          onChange={(e) => updateItemField(item.id, "location", e.target.value)}
+                          onChange={(e) => applyItemFieldUpdate(item.id, "location", e.target.value)}
                         >
                           {LOCATIONS.map((location) => (
                             <option key={location} value={location}>
@@ -1382,7 +1767,7 @@ function stopCamera() {
                         <select
                           style={styles.select}
                           value={item.status || "Available"}
-                          onChange={(e) => updateItemField(item.id, "status", e.target.value)}
+                          onChange={(e) => applyItemFieldUpdate(item.id, "status", e.target.value)}
                         >
                           {STATUSES.map((status) => (
                             <option key={status} value={status}>
@@ -1412,6 +1797,26 @@ function stopCamera() {
                         />
                       </td>
                       <td style={styles.td}>
+                        <textarea
+                          style={{ ...styles.input, minHeight: 88, resize: "vertical" }}
+                          defaultValue={item.notes || ""}
+                          onBlur={(e) => handleAdminTextCommit(item.id, "notes", e.target.value)}
+                        />
+                      </td>
+                      <td style={styles.td}>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          style={styles.input}
+                          defaultValue={Number(item.weeklyRate || DEFAULT_WEEKLY_RATES[item.type] || 0)}
+                          onBlur={(e) => handleAdminTextCommit(item.id, "weeklyRate", e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") e.currentTarget.blur();
+                          }}
+                        />
+                      </td>
+                      <td style={styles.td}>
                         <QRCodeSVG value={item.id} size={50} />
                       </td>
                       <td style={styles.td}>
@@ -1431,7 +1836,17 @@ function stopCamera() {
         <Modal open={showAddModal} onClose={() => setShowAddModal(false)} title="Add Item">
           <div style={styles.formGrid}>
             <LabeledInput label="Type">
-              <select style={styles.select} value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
+              <select
+                style={styles.select}
+                value={form.type}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    type: e.target.value,
+                    weeklyRate: DEFAULT_WEEKLY_RATES[e.target.value] || form.weeklyRate,
+                  })
+                }
+              >
                 {TYPES.map((type) => (
                   <option key={type} value={type}>
                     {type}
@@ -1509,6 +1924,18 @@ function stopCamera() {
                 placeholder="Optional notes"
               />
             </LabeledInput>
+
+            <LabeledInput label="Weekly Rate">
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                style={styles.input}
+                value={form.weeklyRate}
+                onChange={(e) => setForm({ ...form, weeklyRate: e.target.value })}
+                placeholder="Weekly lease rate"
+              />
+            </LabeledInput>
           </div>
 
           <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 18 }}>
@@ -1576,6 +2003,18 @@ function stopCamera() {
                     placeholder="Add a quick note, condition update, sale detail, or handoff comment"
                   />
                 </LabeledInput>
+
+                <LabeledInput label="Weekly Rate">
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    style={styles.input}
+                    value={draftItem.weeklyRate || 0}
+                    onChange={(e) => updateItemField(selectedItem.id, "weeklyRate", e.target.value)}
+                    placeholder="Weekly lease rate"
+                  />
+                </LabeledInput>
               </div>
 
               <div style={{ ...styles.card, ...styles.cardPad, marginTop: 18, background: "#f8fafc" }}>
@@ -1585,6 +2024,7 @@ function stopCamera() {
                   <div><strong>Location:</strong> {draftItem.location || "—"}</div>
                   <div><strong>Assigned To:</strong> {draftItem.assignedTo || "—"}</div>
                   <div><strong>Notes:</strong> {draftItem.notes || "—"}</div>
+                  <div><strong>Weekly Rate:</strong> {formatCurrency(draftItem.weeklyRate || 0)}</div>
                 </div>
               </div>
 
@@ -1641,12 +2081,17 @@ function stopCamera() {
                   </div>
                   <div>
                     <span style={{ fontSize: 12, color: "#64748b", fontWeight: 700 }}>Summary</span>
-                    <div style={{ fontSize: 15, fontWeight: 700 }}>{pendingChange.changes.length} change{pendingChange.changes.length === 1 ? "" : "s"} ready to save</div>
+                    <div style={{ fontSize: 15, fontWeight: 700 }}>
+                      {pendingChange.changes.length} change{pendingChange.changes.length === 1 ? "" : "s"} ready to save
+                    </div>
+                    <div style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>
+                      Use the × button on any line to remove it from this save.
+                    </div>
                   </div>
                 </div>
               </div>
 
-              <PendingChangesSummary changes={pendingChange.changes} />
+              <PendingChangesSummary changes={pendingChange.changes} onRemoveChange={removePendingChange} />
 
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, flexWrap: "wrap" }}>
                 <button style={styles.button} onClick={cancelPendingChange}>
@@ -1666,7 +2111,65 @@ function stopCamera() {
 
 console.assert(normalizeUppercaseFields("model", "abc-123") === "ABC-123", "model should normalize to uppercase");
 console.assert(normalizeUppercaseFields("assignedTo", "lucia") === "lucia", "assignedTo should remain unchanged");
+console.assert(normalizeUppercaseFields("bluetoothName", 123) === "123", "bluetoothName should stringify and uppercase");
+console.assert(normalizeFieldValue("weeklyRate", "99.5") === 99.5, "weeklyRate should normalize to a number");
+console.assert(formatHistoryField("assignedTo") === "Assigned To", "assignedTo label should be human readable");
+console.assert(formatHistoryField("notes") === "Notes", "notes label should be preserved");
+console.assert(formatHistoryValue("") === "—", "empty history values should render as em dash");
+console.assert(formatHistoryValue("Toledo") === "Toledo", "non-empty history values should be returned as strings");
 console.assert(
   generateNextId("Scale", [{ type: "Scale", id: "SC-001" }, { type: "Scale", id: "SC-009" }]) === "SC-010",
   "generateNextId should increment the largest existing scale ID"
+);
+console.assert(
+  generateNextId("Phone", [{ type: "Phone", id: "PH-002" }, { type: "Scale", id: "SC-010" }]) === "PH-003",
+  "generateNextId should ignore other asset types"
+);
+console.assert(
+  getDaysInCurrentStatus({ createdAt: "2026-03-20T00:00:00.000Z", history: [] }, new Date("2026-03-30T00:00:00.000Z")) === 10,
+  "getDaysInCurrentStatus should fall back to created date"
+);
+console.assert(
+  getStatusSinceDate({ createdAt: "2026-03-20T00:00:00.000Z", history: [{ field: "status", date: "2026-03-25T00:00:00.000Z" }] }) === "2026-03-25T00:00:00.000Z",
+  "getStatusSinceDate should use most recent status entry in newest-first history"
+);
+console.assert(
+  groupHistoryEntries([
+    { batchId: "b1", date: "2026-03-30T10:00:00.000Z", field: "status", from: "Available", to: "In Use" },
+    { batchId: "b1", date: "2026-03-30T10:00:00.000Z", field: "assignedTo", from: "", to: "Toledo" },
+    { batchId: "b2", date: "2026-03-30T11:00:00.000Z", field: "location", from: "Warehouse", to: "Transit" },
+  ]).length === 2,
+  "groupHistoryEntries should group changes from the same edition"
+);
+console.assert(
+  groupHistoryEntries([
+    { date: "2026-03-30T10:00:00.000Z", field: "status", from: "Available", to: "In Use" },
+    { date: "2026-03-30T10:05:00.000Z", field: "location", from: "Warehouse", to: "Transit" },
+  ]).length === 2,
+  "groupHistoryEntries should keep legacy entries separate when there is no batch id"
+);
+console.assert(
+  getLeaseStartDate({
+    createdAt: "2026-03-01T00:00:00.000Z",
+    status: "In Use",
+    history: [
+      { field: "status", date: "2026-03-10T00:00:00.000Z", to: "In Use" },
+      { field: "status", date: "2026-03-05T00:00:00.000Z", to: "Available" },
+    ],
+  }) === "2026-03-10T00:00:00.000Z",
+  "getLeaseStartDate should find the current lease start"
+);
+console.assert(
+  Math.round(
+    getAccumulatedLeaseValue(
+      {
+        createdAt: "2026-03-01T00:00:00.000Z",
+        status: "In Use",
+        weeklyRate: 100,
+        history: [{ field: "status", date: "2026-03-10T00:00:00.000Z", to: "In Use" }],
+      },
+      new Date("2026-03-24T00:00:00.000Z")
+    )
+  ) === 200,
+  "getAccumulatedLeaseValue should calculate elapsed weekly lease value"
 );
