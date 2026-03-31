@@ -52,6 +52,7 @@ const EMPTY_FORM = {
   location: "Warehouse",
   status: "Available",
   assignedTo: "",
+  notes: "",
 };
 
 const styles = {
@@ -382,6 +383,7 @@ function formatHistoryField(field) {
   if (field === "manufacturerSN") return "Manufacturer SN";
   if (field === "bluetoothName") return "Bluetooth Name";
   if (field === "created") return "Created";
+  if (field === "notes") return "Notes";
   return field.charAt(0).toUpperCase() + field.slice(1);
 }
 
@@ -566,6 +568,7 @@ export default function InventoryControlApp() {
         manufacturerSN: String(form.manufacturerSN || "").toUpperCase(),
         model: String(form.model || "").toUpperCase(),
         bluetoothName: String(form.bluetoothName || "").toUpperCase(),
+        notes: String(form.notes || "").trim(),
         createdAt: now,
         lastUpdated: now,
         history: [
@@ -620,7 +623,7 @@ export default function InventoryControlApp() {
   function buildPendingChanges(item, draft) {
     if (!item || !draft) return [];
 
-    return ["status", "location", "assignedTo"]
+    return ["status", "location", "assignedTo", "notes"]
       .map((field) => {
         const from = item[field] || "";
         const to = draft[field] || "";
@@ -660,6 +663,17 @@ export default function InventoryControlApp() {
     setPendingChange(null);
   }
 
+  function handleAdminTextCommit(id, field, value) {
+    const item = items.find((entry) => entry.id === id);
+    if (!item) return;
+
+    const normalizedValue = normalizeUppercaseFields(field, value);
+    const oldValue = item[field] || "";
+    if (oldValue === normalizedValue) return;
+
+    applyItemFieldUpdate(id, field, normalizedValue);
+  }
+
   function deleteItem(id) {
     setItems((prev) => prev.filter((item) => item.id !== id));
     if (selectedItemId === id) setSelectedItemId(null);
@@ -673,6 +687,7 @@ export default function InventoryControlApp() {
       status: item.status || "Available",
       location: item.location || "Warehouse",
       assignedTo: item.assignedTo || "",
+      notes: item.notes || "",
     });
   }
 
@@ -694,7 +709,7 @@ export default function InventoryControlApp() {
 
     try {
       setShowScannerModal(true);
-      setScanResult("");
+      handleScanResult($1);
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: { ideal: "environment" } },
         audio: false,
@@ -762,7 +777,7 @@ export default function InventoryControlApp() {
       scanLoopRef.current = requestAnimationFrame(scanLoop);
     } catch (error) {
       setShowScannerModal(false);
-      setScanResult("Camera access failed. Please check browser permissions.");
+      handleScanResult($1);
       console.error(error);
     }
   }
@@ -770,7 +785,7 @@ export default function InventoryControlApp() {
   function handleDecodedValue(rawValue) {
     if (!rawValue) return;
     const value = String(rawValue).trim();
-    setScanResult(value);
+    handleScanResult($1);
     setSearch(value);
     const matchedItem = items.find((item) => String(item.id).toLowerCase() === value.toLowerCase());
     if (matchedItem) setSelectedItemId(matchedItem.id);
@@ -806,14 +821,25 @@ export default function InventoryControlApp() {
         return;
       }
 
-      setScanResult("Could not read this QR yet. Try a brighter photo or move a little farther back.");
+      handleScanResult($1);
     } catch (error) {
-      setScanResult("Image scan failed. Please try again.");
+      handleScanResult($1);
       console.error(error);
     }
   }
 
-  function stopCamera() {
+  function handleScanResult(result) {
+  handleScanResult($1);
+
+  const item = items.find((entry) => entry.id === result);
+  if (item) {
+    openItemEditor(item.id);
+  }
+
+  stopCamera();
+}
+
+function stopCamera() {
     if (scanLoopRef.current) {
       cancelAnimationFrame(scanLoopRef.current);
       scanLoopRef.current = null;
@@ -1186,15 +1212,21 @@ export default function InventoryControlApp() {
                       <td style={styles.td}>
                         <input
                           style={styles.input}
-                          value={item.manufacturerSN || ""}
-                          onChange={(e) => updateItemField(item.id, "manufacturerSN", e.target.value)}
+                          defaultValue={item.manufacturerSN || ""}
+                          onBlur={(e) => handleAdminTextCommit(item.id, "manufacturerSN", e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") e.currentTarget.blur();
+                          }}
                         />
                       </td>
                       <td style={styles.td}>
                         <input
                           style={styles.input}
-                          value={item.model || ""}
-                          onChange={(e) => updateItemField(item.id, "model", e.target.value)}
+                          defaultValue={item.model || ""}
+                          onBlur={(e) => handleAdminTextCommit(item.id, "model", e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") e.currentTarget.blur();
+                          }}
                         />
                       </td>
                       <td style={styles.td}>
@@ -1226,15 +1258,21 @@ export default function InventoryControlApp() {
                       <td style={styles.td}>
                         <input
                           style={styles.input}
-                          value={item.assignedTo || ""}
-                          onChange={(e) => updateItemField(item.id, "assignedTo", e.target.value)}
+                          defaultValue={item.assignedTo || ""}
+                          onBlur={(e) => handleAdminTextCommit(item.id, "assignedTo", e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") e.currentTarget.blur();
+                          }}
                         />
                       </td>
                       <td style={styles.td}>
                         <input
                           style={styles.input}
-                          value={item.bluetoothName || ""}
-                          onChange={(e) => updateItemField(item.id, "bluetoothName", e.target.value)}
+                          defaultValue={item.bluetoothName || ""}
+                          onBlur={(e) => handleAdminTextCommit(item.id, "bluetoothName", e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") e.currentTarget.blur();
+                          }}
                         />
                       </td>
                       <td style={styles.td}>
@@ -1326,6 +1364,15 @@ export default function InventoryControlApp() {
                 onChange={(e) => setForm({ ...form, assignedTo: e.target.value })}
               />
             </LabeledInput>
+
+            <LabeledInput label="Notes">
+              <textarea
+                style={{ ...styles.input, minHeight: 96, resize: "vertical" }}
+                value={form.notes}
+                onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                placeholder="Optional notes"
+              />
+            </LabeledInput>
           </div>
 
           <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 18 }}>
@@ -1381,8 +1428,28 @@ export default function InventoryControlApp() {
                     style={styles.input}
                     value={draftItem.assignedTo || ""}
                     onChange={(e) => updateItemField(selectedItem.id, "assignedTo", e.target.value)}
+                    placeholder="Who has this item?"
                   />
                 </LabeledInput>
+
+                <LabeledInput label="Notes">
+                  <textarea
+                    style={{ ...styles.input, minHeight: 96, resize: "vertical" }}
+                    value={draftItem.notes || ""}
+                    onChange={(e) => updateItemField(selectedItem.id, "notes", e.target.value)}
+                    placeholder="Add a quick note, condition update, sale detail, or handoff comment"
+                  />
+                </LabeledInput>
+              </div>
+
+              <div style={{ ...styles.card, ...styles.cardPad, marginTop: 18, background: "#f8fafc" }}>
+                <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 10 }}>Quick Summary</div>
+                <div style={{ display: "grid", gap: 8, fontSize: 14, color: "#475569" }}>
+                  <div><strong>Status:</strong> {draftItem.status || "—"}</div>
+                  <div><strong>Location:</strong> {draftItem.location || "—"}</div>
+                  <div><strong>Assigned To:</strong> {draftItem.assignedTo || "—"}</div>
+                  <div><strong>Notes:</strong> {draftItem.notes || "—"}</div>
+                </div>
               </div>
 
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 18, flexWrap: "wrap" }}>
