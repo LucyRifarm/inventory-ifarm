@@ -303,7 +303,6 @@ function LabeledInput({ label, children }) {
   );
 }
 
-
 function normalizeUppercaseFields(field, value) {
   return ["manufacturerSN", "model", "bluetoothName"].includes(field)
     ? String(value).toUpperCase()
@@ -321,30 +320,6 @@ function generateNextId(type, items) {
 }
 
 export const __testables = { normalizeUppercaseFields, generateNextId };
-
-function exportCSV() {
-    const headers = ["ID","Type","Location","Status","Assigned To","Model","SN"];
-    const rows = items.map(i => [
-      i.id,
-      i.type,
-      i.location,
-      i.status,
-      i.assignedTo,
-      i.model,
-      i.manufacturerSN
-    ]);
-
-    const csv = [headers, ...rows].map(r => r.map(v => `"${v || ""}"`).join(",")).join("
-");
-
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "inventory.csv";
-    a.click();
-    URL.revokeObjectURL(url);
-  }
 
 export default function InventoryControlApp() {
   const [items, setItems] = useState([]);
@@ -417,6 +392,33 @@ export default function InventoryControlApp() {
     [items]
   );
 
+  function exportCSV() {
+    const headers = ["ID", "Type", "Location", "Status", "Assigned To", "Model", "SN", "Bluetooth Name", "Last Updated"];
+    const rows = items.map((i) => [
+      i.id,
+      i.type,
+      i.location,
+      i.status,
+      i.assignedTo,
+      i.model,
+      i.manufacturerSN,
+      i.bluetoothName,
+      i.lastUpdated,
+    ]);
+
+    const csv = [headers, ...rows]
+      .map((r) => r.map((v) => `"${String(v || "").replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "inventory.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   function toggleTypeFilter(type) {
     setSelectedTypeFilter((prev) => (prev === type ? "All" : type));
   }
@@ -450,11 +452,6 @@ export default function InventoryControlApp() {
 
     setForm(EMPTY_FORM);
     setShowAddModal(false);
-  },
-      ...prev,
-    ]);
-    setForm(EMPTY_FORM);
-    setShowAddModal(false);
   }
 
   function updateItemField(id, field, value) {
@@ -464,7 +461,6 @@ export default function InventoryControlApp() {
 
         const normalizedValue = normalizeUppercaseFields(field, value);
         const oldValue = item[field];
-
         if (oldValue === normalizedValue) return item;
 
         const historyEntry = {
@@ -482,7 +478,6 @@ export default function InventoryControlApp() {
         };
       })
     );
-  } : item)));
   }
 
   function deleteItem(id) {
@@ -1224,7 +1219,6 @@ export default function InventoryControlApp() {
   );
 }
 
-// Lightweight self-checks for core helpers
 console.assert(normalizeUppercaseFields("model", "abc-123") === "ABC-123", "model should normalize to uppercase");
 console.assert(normalizeUppercaseFields("assignedTo", "lucia") === "lucia", "assignedTo should remain unchanged");
 console.assert(
